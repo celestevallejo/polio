@@ -26,26 +26,18 @@ private:
     double erTol = 1e-10;
     
 public:
-    unsigned int nbins;
-    double* x;
-    //double* r;
-
     DiffEq_Sim() {
         t    = 0.0;      //initial time
         h    = 0.1;      //time step
         tmax = 100;
         hmin = 0.2;
-        nbins = 0;
     };
-
-    DiffEq_Sim(unsigned int _nbins):nbins(_nbins) {
-        t    = 0.0;      //initial time
-        h    = 0.1;      //time step
-        tmax = 100;
-        hmin = 0.2;
-    };
-
+    
     ~DiffEq_Sim() {};
+    
+    unsigned int nbins;
+    double* x;
+    //double* r;
     
     void printX() { for(unsigned int i=0; i < nbins; i++) { cout << x[i] << " ";} cout << endl; }
     

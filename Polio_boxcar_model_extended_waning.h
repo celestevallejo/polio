@@ -39,7 +39,22 @@ public:
         g = {0};
         r = {0};
     }
-    Polio_boxcar_model(double bd, vector<double> infect, vector<double> recover, vector<double> wane, int totalBins): DiffEq_Sim(totalBins), mu(bd), b(infect), g(recover), r(wane){}
+    Polio_boxcar_model(double bd, vector<double> infect, vector<double> recover, vector<double> wane, int totalBins): mu(bd){
+        nbins = totalBins;
+        b.resize(infect.size());
+        g.resize(recover.size());
+        r.resize(wane.size());
+        for(unsigned int i = 0; i < infect.size(); i++){
+            b[i] = infect[i];
+        }
+        for(unsigned int i = 0; i < recover.size(); i++){
+            g[i] = recover[i];
+        }
+        for(unsigned int i = 0; i < wane.size(); i++){
+            r[i] = wane[i];
+        }
+        
+    }
     ~Polio_boxcar_model() {};
     
     void initialize(vector<double>initialValues, int rbins) {
