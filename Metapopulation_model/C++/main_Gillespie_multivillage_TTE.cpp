@@ -101,11 +101,11 @@ const double PIR                   = 0.005;            //type 1 paralysis rate (
 const double DET_RATE              = 1.0;
 const double expectedTimeUntilMove = 0; //years
 const double MOVE_RATE             = expectedTimeUntilMove > 0 ? 1/expectedTimeUntilMove : 0;
-const double REINTRODUCTION_RATE      = 0;
-const double burnInTime            = 0; //years
-const double obsTime               = 0; //years
+const double REINTRODUCTION_RATE   = 0;
+const double BURN_IN               = 0; //years
+const double OBS_PERIOD            = 5; //years
 const double seasonalAmp           = 0.05;
-const int numSims                  = 1;
+const int NUM_OF_SIMS              = 1;
 
 bool choose_event(double &ran, const double p) {
     if (ran < p) {
@@ -147,10 +147,10 @@ vector<double> calculate_village_rates(const vector<vector<int>> &state_data, co
     local_event_rates[RECOVERY_FROM_FIRST_INFECTION_EVENT]  = RECOVERY*I1_;                    // first infected revovery event
     local_event_rates[RECOVERY_FROM_REINFECTION_EVENT]      = (RECOVERY/KAPPA)*IR_;            // reinfected recovery event
     local_event_rates[WANING_EVENT]                         = RHO*R_;                          // waning event
-    local_event_rates[DEATH_EVENT]                          = DEATH*village_pop[village];            // natural death
-    local_event_rates[MOVE_EVENT]                           = MOVE_RATE*village_pop[village];        // rate of movement from village
+    local_event_rates[DEATH_EVENT]                          = DEATH*village_pop[village];      // natural death
+    local_event_rates[MOVE_EVENT]                           = MOVE_RATE*village_pop[village];  // rate of movement from village
 
-    if (time < burnInTime) {
+    if (time < BURN_IN) {
         local_event_rates[REINTRODUCTION_EVENT]             = REINTRODUCTION_RATE*village_pop[village]; // rate of reintroduction into system
     } else{
         local_event_rates[REINTRODUCTION_EVENT]             = 0;
@@ -184,46 +184,46 @@ VillageEvent sample_event(mt19937& RNG, double& totalRate, const vector<vector<i
     exit(-100);
 }
 
-//void update_compartments(vector<int> &S, vector<int> &I1, vector<int> &R, vector<int> &P, vector<int> &IR, const uint A, const uint B, const StateType state_from_A, const StateType state_from_B, const double time, const double burnInTime, const double timeAfterBurnIn, vector<vector<double>> &villageExtinctionIntervals,vector<double> &villageExtinctionTimes) {
-void update_compartments(vector<vector<int>> &state_data, vector<unsigned int> vil_pair, const vector<StateType> &state_pair, const double time, const double burnInTime, const double timeAfterBurnIn, vector<vector<double>> &villageExtinctionIntervals,vector<double> &villageExtinctionTimes) {
+void update_compartments(vector<vector<int>> &state_data, vector<unsigned int> vil_pair, const vector<StateType> &state_pair, const double time, const double BURN_IN, const double timeAfterBurnIn, vector<vector<double>> &villageExtinctionIntervals,vector<double> &villageExtinctionTimes) {
+    if (state_pair[0] != state_pair[1]) { 
+        for (int i = 0; i < 2; ++i) { // foreach village (vil_pair reversed at end of first loop)
+            unsigned int A = vil_pair[0];
+            unsigned int B = vil_pair[1];
+            switch (state_pair[i]) {
+                case S:  --state_data[S][A];  ++state_data[S][B];  break;
+                case I1:{
+                    if (time > BURN_IN) {
+                        if ((state_data[I1][B]+state_data[IR][B]==0) and villageExtinctionTimes[B]!=numeric_limits<double>::max()) {
+                            villageExtinctionIntervals[B].push_back((time-timeAfterBurnIn) - villageExtinctionTimes[B]);
+                        }
+                    }
+                    --state_data[I1][A]; ++state_data[I1][B];
+                    double extinctionTime = time - timeAfterBurnIn;
+                    if (state_data[I1][A]+state_data[IR][A]==0 and time > BURN_IN) {
+                        villageExtinctionTimes[A] = extinctionTime;
+                    }
+                }
+                    break;
+                case R:  --state_data[R][A];  ++state_data[R][B];  break;
+                case P:  --state_data[P][A];  ++state_data[P][B];  break;
+                case IR:{
+                    if (time > BURN_IN) {
+                        if ((state_data[I1][B]+state_data[IR][B]==0) and villageExtinctionTimes[B]!=numeric_limits<double>::max()) {
+                            villageExtinctionIntervals[B].push_back((time-timeAfterBurnIn) - villageExtinctionTimes[B]);
+                        }
+                    }
+                    --state_data[IR][A]; ++state_data[IR][B];
+                    double extinctionTime = time - timeAfterBurnIn;
+                    if (state_data[I1][A]+state_data[IR][A]==0 and time > BURN_IN) {
+                        villageExtinctionTimes[A] = extinctionTime;
+                    }
+                }
+                    break;
+                default: break;
+            }
 
-    for (int i = 0; i < 2; ++i) { // foreach village (vil_pair reversed at end of first loop)
-        unsigned int A = vil_pair[0];
-        unsigned int B = vil_pair[1];
-        switch (state_pair[i]) {
-            case S:  --state_data[S][A];  ++state_data[S][B];  break;
-            case I1:{
-                if (time > burnInTime) {
-                    if ((state_data[I1][B]+state_data[IR][B]==0) and villageExtinctionTimes[B]!=numeric_limits<double>::max()) {
-                        villageExtinctionIntervals[B].push_back((time-timeAfterBurnIn) - villageExtinctionTimes[B]);
-                    }
-                }
-                --state_data[I1][A]; ++state_data[I1][B];
-                double extinctionTime = time - timeAfterBurnIn;
-                if (state_data[I1][A]+state_data[IR][A]==0 and time > burnInTime) {
-                    villageExtinctionTimes[A] = extinctionTime;
-                }
-            }
-                break;
-            case R:  --state_data[R][A];  ++state_data[R][B];  break;
-            case P:  --state_data[P][A];  ++state_data[P][B];  break;
-            case IR:{
-                if (time > burnInTime) {
-                    if ((state_data[I1][B]+state_data[IR][B]==0) and villageExtinctionTimes[B]!=numeric_limits<double>::max()) {
-                        villageExtinctionIntervals[B].push_back((time-timeAfterBurnIn) - villageExtinctionTimes[B]);
-                    }
-                }
-                --state_data[IR][A]; ++state_data[IR][B];
-                double extinctionTime = time - timeAfterBurnIn;
-                if (state_data[I1][A]+state_data[IR][A]==0 and time > burnInTime) {
-                    villageExtinctionTimes[A] = extinctionTime;
-                }
-            }
-                break;
-            default: break;
+            vil_pair = {vil_pair[1], vil_pair[0]};
         }
-
-        vil_pair = {vil_pair[1], vil_pair[0]};
     }
 }
 
@@ -233,66 +233,28 @@ bool no_infections(const vector<vector<int>> &state_data) { return all_zeroes(st
 
 bool no_local_infections(const vector<vector<int>> &state_data, const unsigned int village) { return state_data[I1][village] == 0 and state_data[IR][village] == 0; }
 
-inline void process_death_event(vector<vector<int>> &state_data, const int chosenVillage, mt19937& RNG, vector<double> &transmissionIntervals, const double time, const double timeAfterBurnIn, double &reinfectTime, const double burnInTime, vector<double> &extinctionIntervals, double &lastPCase, vector<double> &villageExtinctionTimes) {
-    const int j = chosenVillage;
+inline void process_death_event(vector<vector<int>> &state_data, const int village, mt19937& RNG, vector<double> &transmissionIntervals, const double time, const double timeAfterBurnIn, double &reinfectTime, const double BURN_IN, vector<double> &extinctionIntervals, double &lastPCase, vector<double> &villageExtinctionTimes) {
     vector<int> rates(NUM_OF_STATE_TYPES, 0);
-    rates[S]  = state_data[S][j];
-    rates[I1] = state_data[I1][j];
-    rates[R]  = state_data[R][j];
-    rates[P]  = state_data[P][j];
-    rates[IR] = state_data[IR][j];
+    for (unsigned int state = 0; state < NUM_OF_STATE_TYPES; ++state) { rates[state] = state_data[state][village]; }
 
     StateType source_state = (StateType) rand_nonuniform_uint(rates, RNG);
 
-    if (source_state == S) return; // important to bail now, since nothing happens in this case
+    ++state_data[S][village];
+    --state_data[source_state][village];
 
-    ++state_data[S][j];
-    switch(source_state) {
-        case I1:{
-            --state_data[I1][j];
-            if (time > burnInTime) {
-                double extinctionTime = time - timeAfterBurnIn;
-                if (state_data[I1][j]+state_data[IR][j]==0) {
-                    villageExtinctionTimes[j] = extinctionTime;
-                }
-
-                if (no_infections(state_data)) {
-                    if (reinfectTime!=numeric_limits<double>::max()) {
-                        transmissionIntervals.push_back(extinctionTime - reinfectTime);
-                    }
-                    if (lastPCase!= numeric_limits<double>::max()) {
-                        extinctionIntervals.push_back(extinctionTime - lastPCase);
-                    }
-                }
+    if ((source_state == I1 or source_state == IR) and time > BURN_IN) {
+        double extinctionTime = time - timeAfterBurnIn;
+        if (no_local_infections(state_data, village)) {
+            villageExtinctionTimes[village] = extinctionTime;
+        }
+        if (no_infections(state_data)) {
+            if (reinfectTime != numeric_limits<double>::max()) {
+                transmissionIntervals.push_back(extinctionTime - reinfectTime);
+            }
+            if (lastPCase != numeric_limits<double>::max()) {
+                extinctionIntervals.push_back(extinctionTime - lastPCase);
             }
         }
-            break;
-        case R:
-            --state_data[R][j];
-            break;
-        case P:
-            --state_data[P][j];
-            break;
-        case IR:{
-            --state_data[IR][j];
-            if (time > burnInTime) {
-                double extinctionTime = time - timeAfterBurnIn;
-                if (state_data[I1][j]+state_data[IR][j]==0) {
-                    villageExtinctionTimes[j] = extinctionTime;
-                }
-                if (no_infections(state_data)) {
-                    if (reinfectTime!=numeric_limits<double>::max()) {
-                        transmissionIntervals.push_back(extinctionTime - reinfectTime);
-                    }
-                    if (lastPCase!= numeric_limits<double>::max()) {
-                        extinctionIntervals.push_back(extinctionTime - lastPCase);
-                    }
-                }
-            }
-        }
-            break;
-        default:
-            break;
     }
 }
 
@@ -302,23 +264,20 @@ StateType sample_migrant(vector<vector<int>> &state_data, const int village, mt1
     return (StateType) rand_nonuniform_uint(weights, RNG);
 }
 
-inline void process_movement_event(vector<vector<int>> &state_data, vector<unsigned int> vil_pair, mt19937& RNG, const double time, const double burnInTime, const double timeAfterBurnIn, vector<vector<double>> &villageExtinctionIntervals, vector<double> &villageExtinctionTimes) {
-    vector<int> weights(NUM_OF_STATE_TYPES, 0);
-    vector<StateType> state_pair;
+inline void process_movement_event(vector<vector<int>> &state_data, vector<unsigned int> vil_pair, mt19937& RNG, const double time, const double BURN_IN, const double timeAfterBurnIn, vector<vector<double>> &villageExtinctionIntervals, vector<double> &villageExtinctionTimes) {
+    if (vil_pair[0] != vil_pair[1]) { 
+        vector<int> weights(NUM_OF_STATE_TYPES, 0);
+        vector<StateType> state_pair;
 
-    // Sample states of people to move from A to B and vice versa
-    state_pair.push_back(sample_migrant(state_data, vil_pair[0], RNG));
-    state_pair.push_back(sample_migrant(state_data, vil_pair[1], RNG));
-
-    if (state_pair[0] == state_pair[1]) {
-        return; // nothing actually happens
-    } else {
-        update_compartments(state_data, vil_pair, state_pair, time, burnInTime, timeAfterBurnIn, villageExtinctionIntervals, villageExtinctionTimes);
+        // Sample states of people to move from A to B and vice versa
+        state_pair.push_back(sample_migrant(state_data, vil_pair[0], RNG));
+        state_pair.push_back(sample_migrant(state_data, vil_pair[1], RNG));
+        update_compartments(state_data, vil_pair, state_pair, time, BURN_IN, timeAfterBurnIn, villageExtinctionIntervals, villageExtinctionTimes);
     }
 }
 
-void process_reintroduction_helper(const StateType from, const StateType to, const double time, vector<vector<int>> &state_data, const int village, double &timeAfterBurnIn, double &reinfectTime, vector<vector<double>> &villageExtinctionIntervals, vector<double> &villageExtinctionTimes) {
-    if (time > burnInTime) {
+void process_reintroduction_helper(const StateType from, const StateType to, const double time, vector<vector<int>> &state_data, const int village, const double timeAfterBurnIn, double &reinfectTime, vector<vector<double>> &villageExtinctionIntervals, vector<double> &villageExtinctionTimes) {
+    if (time > BURN_IN) {
         if ( no_local_infections(state_data, village) and villageExtinctionTimes[village] != numeric_limits<double>::max() ) {
             villageExtinctionIntervals[village].push_back((time - timeAfterBurnIn) - villageExtinctionTimes[village]);
         }
@@ -329,7 +288,7 @@ void process_reintroduction_helper(const StateType from, const StateType to, con
     --state_data[from][village]; ++state_data[to][village];
 }
 
-inline void process_reintroduction_event(vector<vector<int>> &state_data, const int village, mt19937& RNG, vector<double> &timeBetweenPCases, double time, double &timeAfterBurnIn, double &reinfectTime, double &lastPCase, vector<vector<double>> &villageExtinctionIntervals,vector<double> &villageExtinctionTimes) {
+inline void process_reintroduction_event(vector<vector<int>> &state_data, const int village, mt19937& RNG, vector<double> &timeBetweenPCases, const double time, const double timeAfterBurnIn, double &reinfectTime, double &lastPCase, vector<vector<double>> &villageExtinctionIntervals,vector<double> &villageExtinctionTimes) {
     //treat reintroduction events as exposure events
     vector<int> weights(NUM_OF_STATE_TYPES, 0);
 
@@ -341,10 +300,9 @@ inline void process_reintroduction_event(vector<vector<int>> &state_data, const 
     if (state == S) {
         process_reintroduction_helper(S, I1, time, state_data, village, timeAfterBurnIn, reinfectTime, villageExtinctionIntervals, villageExtinctionTimes);
 
-        double rr = runif(RNG);
-        if (time > burnInTime) {//start keeping track after burn in
-            if (rr<(PIR*DET_RATE)) {
-                assert(timeAfterBurnIn > burnInTime);
+        if (time > BURN_IN) {//start keeping track after burn in
+            if (runif(RNG) < PIR * DET_RATE) {
+                assert(timeAfterBurnIn > BURN_IN);
                 if (lastPCase != numeric_limits<double>::max()) {
                     timeBetweenPCases.push_back(time - timeAfterBurnIn - lastPCase);
                 }
@@ -365,7 +323,7 @@ void output_results(vector<vector<stringstream>> &output_streams, vector<strings
     }
 
     string base_filename = numInEachVil + "reintRate_"+to_string(REINTRODUCTION_RATE) + "migRate_"+to_string(MOVE_RATE)+ext;
-    string parameters = +"beta_"+to_string(int(BETA))+"detect_rate_"+to_string(float(DET_RATE))+"rho_"+to_string(float(RHO))+ "NUM_OF_VILLAGES_"+to_string(NUM_OF_VILLAGES) + "migRate_"+to_string(float(MOVE_RATE))+"burnIn_"+to_string(burnInTime)+"obsTime_"+to_string(obsTime) + "seasonalAmp_"+to_string(seasonalAmp);
+    string parameters = +"beta_"+to_string(int(BETA))+"detect_rate_"+to_string(float(DET_RATE))+"rho_"+to_string(float(RHO))+ "NUM_OF_VILLAGES_"+to_string(NUM_OF_VILLAGES) + "migRate_"+to_string(float(MOVE_RATE))+"burnIn_"+to_string(BURN_IN)+"obsTime_"+to_string(OBS_PERIOD) + "seasonalAmp_"+to_string(seasonalAmp);
     //read parameters into database file
     fstream params;
     params.open(parameterFileDatabase, fstream::app);
@@ -424,7 +382,7 @@ void output_results(vector<vector<stringstream>> &output_streams, vector<strings
 }
 
 void process_recovery_event(const vector<vector<int>> &state_data, const unsigned int village, const double time, const double timeAfterBurnIn, vector<double> &villageExtinctionTimes, vector<double> &transmissionIntervals, vector<double> &extinctionIntervals, const double reinfectTime, const double lastPCase) {
-    if (time > burnInTime) {
+    if (time > BURN_IN) {
         const double extinctionTime = time - timeAfterBurnIn;
         if (state_data[I1][village] + state_data[IR][village] == 0) {
             villageExtinctionTimes[village] = extinctionTime;
@@ -455,10 +413,9 @@ void event_handler(const VillageEvent &ve, vector<vector<int>> &state_data, vect
         case FIRST_INFECTION_EVENT:{
             --state_data[S][village]; ++state_data[I1][village];
             //check to see if paralytic case occurs
-            double rr = runif(RNG);
-            if (time > burnInTime) {//start keeping track after burn in
-                if (rr < PIR*DET_RATE) {
-                    assert(timeAfterBurnIn > burnInTime);
+            if (time > BURN_IN) {//start keeping track after burn in
+                if (runif(RNG) < PIR*DET_RATE) {
+                    assert(timeAfterBurnIn > BURN_IN);
                     if (lastPCase != numeric_limits<double>::max()) {
                         timeBetweenPCases.push_back(time - timeAfterBurnIn - lastPCase);
                     }
@@ -486,16 +443,12 @@ void event_handler(const VillageEvent &ve, vector<vector<int>> &state_data, vect
         }
             break;
         case DEATH_EVENT:{
-            process_death_event(state_data, village, RNG, transmissionIntervals, time, timeAfterBurnIn, reinfectTime, burnInTime, extinctionIntervals, lastPCase, villageExtinctionTimes);
+            process_death_event(state_data, village, RNG, transmissionIntervals, time, timeAfterBurnIn, reinfectTime, BURN_IN, extinctionIntervals, lastPCase, villageExtinctionTimes);
         }
             break;
         case MOVE_EVENT:{
             uint other = rand_nonuniform_uint(village_pop, RNG);
-            //if no movement occurs then no rates need to be updated
-            if (village != other) {
-                process_movement_event(state_data, {village, other}, RNG, time, burnInTime, timeAfterBurnIn, villageExtinctionIntervals, villageExtinctionTimes);
-                //rates are calculated after movement
-            }
+            process_movement_event(state_data, {village, other}, RNG, time, BURN_IN, timeAfterBurnIn, villageExtinctionIntervals, villageExtinctionTimes);
         }
             break;
         case REINTRODUCTION_EVENT:{
@@ -571,7 +524,7 @@ int main() {
     vector<int> eps_intercase_ivls(EPS_MAX*EPS_RES, 0); // 50 yrs divided into 100 bins each
 
     //The Simulation
-    for (int i = 0; i < numSims; i++) {
+    for (int i = 0; i < NUM_OF_SIMS; i++) {
         double time = 0.0;
         double previousTime = 0.0;
         bool firstBurnInLoop = true; //keeps track of first time entering burn in loop
@@ -607,7 +560,7 @@ int main() {
             //time += rng(RNG);
 
             //start collecting data after burn in
-            if (time > burnInTime) {
+            if (time > BURN_IN) {
                 if (firstBurnInLoop) {
                     timeAfterBurnIn = time;
                     firstBurnInLoop = false; //to keep timeAfterBurnIn constant
@@ -634,7 +587,7 @@ int main() {
             }
 
             //stopping condition
-            if ((no_infections(state_data) and time > burnInTime) or ((time - timeAfterBurnIn) >= obsTime)) {
+            if ((no_infections(state_data) and time > BURN_IN) or ((time - timeAfterBurnIn) >= OBS_PERIOD)) {
                 //determine if there were no p cases in any villages
                 
                 if (timeBetweenPCases.size() == 0) {
