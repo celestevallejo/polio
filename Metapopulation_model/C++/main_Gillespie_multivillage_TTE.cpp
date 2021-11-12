@@ -20,13 +20,22 @@
 #include <sys/time.h>
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 
 
 using namespace std;
 
+std::string data = "Abc";
+string tolower(const string input) {
+    string output(input);
+    transform(input.begin(), input.end(), output.begin(), [](unsigned char c){ return std::tolower(c); });
+    return output;
+}
+
 //string output_dir = "/home/tjhladish/work/polio-small-pop/output/";
 //string output_dir ="/Users/Celeste/Desktop/multipatch_model/sim_results/";
-string output_dir ="/Users/Celeste/Desktop/polio-small-pop/polio-small-pop/new_data_after_review/";
+//string output_dir ="/Users/Celeste/Desktop/polio-small-pop/polio-small-pop/new_data_after_review/";
+string output_dir ="./";
 //string output_dir = "/home/vallejo.26/";
 string ext = "_test.csv";
 const string SEP = ",";
@@ -35,44 +44,47 @@ const string parameterFileDatabase = "/home/vallejo.26/parameterDatabase.csv";
 
 uniform_real_distribution<> runif(0.0, 1.0);
 
-enum StateType {S,
-                I1,
-                R,
-                P,
-                IR,
-                NUM_OF_STATE_TYPES};
+#define MAKE_ENUM(VAR) VAR,
+#define MAKE_STRINGS(VAR) #VAR,
 
-inline std::ostream& operator<<(std::ostream& out, const StateType value){
-    const char* s = 0;
-#define PROCESS_VAL(p) case(p): s = #p; break;
-    switch(value){
-        PROCESS_VAL(S);
-        PROCESS_VAL(I1);
-        PROCESS_VAL(R);
-        PROCESS_VAL(P);
-        PROCESS_VAL(IR);
-        PROCESS_VAL(NUM_OF_STATE_TYPES);
-    }
-#undef PROCESS_VAL
-    return out << s;
-}
 
-enum EventType {MOVE_EVENT,
-                FIRST_INFECTION_EVENT,
-                REINFECTION_EVENT,
-                RECOVERY_FROM_FIRST_INFECTION_EVENT,
-                RECOVERY_FROM_REINFECTION_EVENT,
-                WANING_EVENT,
-                DEATH_EVENT,
-                REINTRODUCTION_EVENT,
-                NUM_OF_EVENT_TYPES};
+#define STATE_TYPE(VAR) \
+    VAR(S) \
+    VAR(I1) \
+    VAR(R) \
+    VAR(P) \
+    VAR(IR) \
+    VAR(NUM_OF_STATE_TYPES)
+enum StateType{ STATE_TYPE(MAKE_ENUM) };
+const char* const state_as_string[] = { STATE_TYPE(MAKE_STRINGS) };
+inline std::ostream& operator<<(std::ostream& out, const StateType value){ return out << state_as_string[value]; }
 
-enum QuantOutputType {TIME_OUT,
-                      TIME_BETWEEN_PCASES_OUT,
-                      TRANSMISSION_INTERVAL_OUT,
-                      EXTINCTION_INTERVAL_OUT,
-                      EXTINCTION_TIME_OUT,
-                      NUM_OF_QUANTOUTPUT_TYPES};
+
+#define EVENT_TYPE(VAR) \
+    VAR(MOVE_EVENT) \
+    VAR(FIRST_INFECTION_EVENT) \
+    VAR(REINFECTION_EVENT) \
+    VAR(RECOVERY_FROM_FIRST_INFECTION_EVENT) \
+    VAR(RECOVERY_FROM_REINFECTION_EVENT) \
+    VAR(WANING_EVENT) \
+    VAR(DEATH_EVENT) \
+    VAR(REINTRODUCTION_EVENT) \
+    VAR(NUM_OF_EVENT_TYPES)
+enum EventType{ EVENT_TYPE(MAKE_ENUM) };
+const char* const event_as_string[] = { EVENT_TYPE(MAKE_STRINGS) };
+inline std::ostream& operator<<(std::ostream& out, const EventType value){ return out << event_as_string[value]; }
+
+
+#define QUANT_OUTPUT_TYPE(VAR) \
+    VAR(TIME_OUT) \
+    VAR(TIME_BETWEEN_PCASES_OUT) \
+    VAR(TRANSMISSION_INTERVAL_OUT) \
+    VAR(EXTINCTION_INTERVAL_OUT) \
+    VAR(EXTINCTION_TIME_OUT) \
+    VAR(NUM_OF_QUANTOUTPUT_TYPES)
+enum QuantOutputType{ QUANT_OUTPUT_TYPE(MAKE_ENUM) };
+const char* const quant_output_as_string[] = { QUANT_OUTPUT_TYPE(MAKE_STRINGS) };
+inline std::ostream& operator<<(std::ostream& out, const QuantOutputType value){ return out << quant_output_as_string[value]; }
 
 
 struct Params{
