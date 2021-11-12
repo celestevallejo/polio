@@ -25,24 +25,11 @@
 
 using namespace std;
 
-std::string data = "Abc";
 string tolower(const string input) {
     string output(input);
     transform(input.begin(), input.end(), output.begin(), [](unsigned char c){ return std::tolower(c); });
     return output;
 }
-
-//string output_dir = "/home/tjhladish/work/polio-small-pop/output/";
-//string output_dir ="/Users/Celeste/Desktop/multipatch_model/sim_results/";
-//string output_dir ="/Users/Celeste/Desktop/polio-small-pop/polio-small-pop/new_data_after_review/";
-string output_dir ="./";
-//string output_dir = "/home/vallejo.26/";
-string ext = "_test.csv";
-const string SEP = ",";
-const string parameterFileDatabase = "/home/vallejo.26/parameterDatabase.csv";
-//const string parameterFileDatabase = "/Users/Celeste/Desktop/multipatch_model/multiPatch_repo/parameterDatabase.csv";
-
-uniform_real_distribution<> runif(0.0, 1.0);
 
 #define MAKE_ENUM(VAR) VAR,
 #define MAKE_STRINGS(VAR) #VAR,
@@ -76,11 +63,11 @@ inline std::ostream& operator<<(std::ostream& out, const EventType value){ retur
 
 
 #define QUANT_OUTPUT_TYPE(VAR) \
-    VAR(TIME_OUT) \
-    VAR(TIME_BETWEEN_PCASES_OUT) \
-    VAR(TRANSMISSION_INTERVAL_OUT) \
-    VAR(EXTINCTION_INTERVAL_OUT) \
-    VAR(EXTINCTION_TIME_OUT) \
+    VAR(TIME) \
+    VAR(TIME_BETWEEN_PCASES) \
+    VAR(TRANSMISSION_INTERVAL) \
+    VAR(EXTINCTION_INTERVAL) \
+    VAR(EXTINCTION_TIME) \
     VAR(NUM_OF_QUANTOUTPUT_TYPES)
 enum QuantOutputType{ QUANT_OUTPUT_TYPE(MAKE_ENUM) };
 const char* const quant_output_as_string[] = { QUANT_OUTPUT_TYPE(MAKE_STRINGS) };
@@ -97,11 +84,24 @@ struct Params{
     vector<int> Population;
 };
 
+
 struct VillageEvent{ //keeps track of which events are occurring to which village
     EventType event_type;
     int village;
     double time;
 };
+
+//string output_dir = "/home/tjhladish/work/polio-small-pop/output/";
+//string output_dir ="/Users/Celeste/Desktop/multipatch_model/sim_results/";
+//string output_dir ="/Users/Celeste/Desktop/polio-small-pop/polio-small-pop/new_data_after_review/";
+string output_dir ="./";
+//string output_dir = "/home/vallejo.26/";
+string ext = "_test.csv";
+const string SEP = ",";
+const string parameterFileDatabase = "/home/vallejo.26/parameterDatabase.csv";
+//const string parameterFileDatabase = "/Users/Celeste/Desktop/multipatch_model/multiPatch_repo/parameterDatabase.csv";
+
+uniform_real_distribution<> runif(0.0, 1.0);
 
 //fast waning parameters:
 //kappa = 0.4179
@@ -120,7 +120,7 @@ const double RHO                   = 0.2; //waning speed parameter
 
 //other parameters
 const vector<int> village_pop      = {100000, 100000};
-const int NUM_OF_VILLAGES          = village_pop.size(); //total number of villages under consideration
+const size_t NUM_OF_VILLAGES          = village_pop.size(); //total number of villages under consideration
 const int numDaysToRecover         = 28;
 const double RECOVERY              = 365/numDaysToRecover;    //recovery rate (/year)
 const double BETA                  = 135;   //contact rate (individuals/year)
@@ -137,6 +137,11 @@ const double OBS_PERIOD            = 50; //years
 const double seasonalAmp           = 0.0;
 const int NUM_OF_SIMS              = 4;
 const bool RETRY_SIMS              = false;
+
+bool extinction_observed(double val)     { return val != numeric_limits<double>::max(); }
+bool reinfection_observed(double val)    { return val != numeric_limits<double>::max(); }
+bool paralytic_case_observed(double val) { return val != numeric_limits<double>::max(); }
+bool infection_observed(double val)      { return val != numeric_limits<double>::max(); }
 
 void cerr_state(const vector<vector<int>> &state_data, const int village) {
     for (size_t state = 0; state < NUM_OF_STATE_TYPES; ++state) {
@@ -199,7 +204,7 @@ VillageEvent sample_event(mt19937& RNG, double& totalRate, const vector<vector<i
     vector<vector<double>> event_rates(NUM_OF_VILLAGES, vector<double>(NUM_OF_EVENT_TYPES));
     totalRate = 0.0;
     VillageEvent ve;
-    for (int vil = 0; vil < NUM_OF_VILLAGES; vil++) {
+    for (size_t vil = 0; vil < NUM_OF_VILLAGES; vil++) {
         event_rates[vil] = calculate_village_rates(state_data, vil, time);
         totalRate += accumulate(event_rates[vil].begin(),event_rates[vil].end(),0.0);
     }
@@ -208,8 +213,8 @@ VillageEvent sample_event(mt19937& RNG, double& totalRate, const vector<vector<i
 
     double ran = totalRate * runif(RNG);
 
-    for (int event = 0; event < NUM_OF_EVENT_TYPES; ++event) {
-        for (int vil = 0; vil < NUM_OF_VILLAGES; vil++) {
+    for (size_t event = 0; event < NUM_OF_EVENT_TYPES; ++event) {
+        for (size_t vil = 0; vil < NUM_OF_VILLAGES; vil++) {
             if (choose_event(ran, event_rates[vil][event])) {
                 ve.event_type = (EventType) event;
                 ve.village = vil;
@@ -248,7 +253,7 @@ void move_from_A_to_B (vector<vector<int>> &state_data, const vector<unsigned in
 
             if (not is_infected_state(state_A) and is_infected_state(state_B)) {
                 // Village A has had no infections, but is getting one
-                if (villageExtinctionTimes[vil_A] != numeric_limits<double>::max()) {
+                if (extinction_observed(villageExtinctionTimes[vil_A])) {
                     villageExtinctionIntervals[vil_A].push_back(obs_time - villageExtinctionTimes[vil_A]);
                 }
             }
@@ -273,10 +278,10 @@ inline void process_death_event(vector<vector<int>> &state_data, const int villa
             villageExtinctionTimes[village] = extinctionTime;
         }
         if (zero_infections(state_data)) {
-            if (reinfectTime != numeric_limits<double>::max()) {
+            if (reinfection_observed(reinfectTime)) {
                 transmissionIntervals.push_back(extinctionTime - reinfectTime);
             }
-            if (lastPCase != numeric_limits<double>::max()) {
+            if (paralytic_case_observed(lastPCase)) {
                 extinctionIntervals.push_back(extinctionTime - lastPCase);
             }
         }
@@ -309,7 +314,7 @@ inline void process_movement_event(vector<vector<int>> &state_data, vector<unsig
 
 void process_reintroduction_helper(const StateType from, const StateType to, const double obs_time, vector<vector<int>> &state_data, const int village, double &reinfectTime, vector<vector<double>> &villageExtinctionIntervals, vector<double> &villageExtinctionTimes) {
     if (obs_time > 0) {
-        if (zero_local_infections(state_data, village) and villageExtinctionTimes[village] != numeric_limits<double>::max() ) {
+        if (zero_local_infections(state_data, village) and extinction_observed(villageExtinctionTimes[village])) {
             villageExtinctionIntervals[village].push_back(obs_time - villageExtinctionTimes[village]);
         }
         if (zero_infections(state_data)) {
@@ -333,7 +338,7 @@ inline void process_reintroduction_event(vector<vector<int>> &state_data, const 
 
         if (obs_time > 0) {//start keeping track after burn in
             if (runif(RNG) < PIR * DET_RATE) {
-                if (lastPCase != numeric_limits<double>::max()) {
+                if (paralytic_case_observed(lastPCase)) {
                     timeBetweenPCases.push_back(obs_time - lastPCase);
                 }
                 lastPCase = obs_time;
@@ -347,13 +352,15 @@ inline void process_reintroduction_event(vector<vector<int>> &state_data, const 
 
 void output_results(vector<vector<stringstream>> &output_streams, vector<stringstream> &outputVillageExtinctionInterval_stream, vector<stringstream> &outputQuant_streams) {
     string numInEachVil = "";
-    for (int i = 0; i < NUM_OF_VILLAGES; i++) {
-        cout<<"num in each vil"<<village_pop[i]<<"\n";
+    for (size_t i = 0; i < NUM_OF_VILLAGES; i++) {
+        cout << "num in each vil" << village_pop[i] << "\n";
         numInEachVil += to_string(int(village_pop[i]));
     }
 
-    string base_filename = numInEachVil + "reintRate_"+to_string(REINTRODUCTION_RATE) + "migRate_"+to_string(MOVE_RATE)+ext;
-    string parameters = +"beta_"+to_string(int(BETA))+"detect_rate_"+to_string(float(DET_RATE))+"rho_"+to_string(float(RHO))+ "NUM_OF_VILLAGES_"+to_string(NUM_OF_VILLAGES) + "migRate_"+to_string(float(MOVE_RATE))+"burnIn_"+to_string(MIN_BURN_IN)+"obsTime_"+to_string(OBS_PERIOD) + "seasonalAmp_"+to_string(seasonalAmp);
+    string base_filename = numInEachVil + "reintRate_" + to_string(REINTRODUCTION_RATE) + "migRate_" + to_string(MOVE_RATE)+ext;
+    string parameters = "beta_" + to_string(int(BETA)) + "detect_rate_" + to_string(float(DET_RATE)) + "rho_" + to_string(float(RHO)) + 
+                        "NUM_OF_VILLAGES_" + to_string(NUM_OF_VILLAGES) + "migRate_" + to_string(float(MOVE_RATE)) + "burnIn_" + to_string(MIN_BURN_IN) +
+                        "obsTime_" + to_string(OBS_PERIOD) + "seasonalAmp_" + to_string(seasonalAmp);
     //read parameters into database file
     fstream params;
     params.open(parameterFileDatabase, fstream::app);
@@ -364,33 +371,26 @@ void output_results(vector<vector<stringstream>> &output_streams, vector<strings
     vector<string> outputVillageExtinctionInterval_filenames(NUM_OF_VILLAGES);
 
     vector<string> outputQuant_filenames(NUM_OF_QUANTOUTPUT_TYPES);
+    for (size_t output_type = 0; output_type < outputQuant_filenames.size(); ++output_type) {
+        outputQuant_filenames[output_type] = output_dir + quant_output_as_string[output_type] + base_filename;
+    }
 
-    outputQuant_filenames[TIME_BETWEEN_PCASES_OUT ] = output_dir + "time_between_pcases_"+base_filename;
-    outputQuant_filenames[TRANSMISSION_INTERVAL_OUT ] = output_dir + "transmission_interval_"+base_filename;
-    outputQuant_filenames[EXTINCTION_INTERVAL_OUT ] = output_dir + "extinction_interval_"+base_filename;
-    outputQuant_filenames[TIME_OUT ] = output_dir + "TIME_"+base_filename;
-    outputQuant_filenames[EXTINCTION_TIME_OUT ] = output_dir + "extTime_"+base_filename;
-
-
-    for (int vil = 0; vil < NUM_OF_VILLAGES; vil++) {
-        int patch = vil + 1;
-        output_filenames[S][vil]  = output_dir + "S"+to_string(patch)+"_"+base_filename;
-        output_filenames[I1][vil] = output_dir + "I1"+to_string(patch)+"_"+base_filename;
-        output_filenames[R][vil]  = output_dir + "R"+to_string(patch)+"_"+base_filename;
-        output_filenames[P][vil]  = output_dir + "P"+to_string(patch)+"_"+base_filename;
-        output_filenames[IR][vil] = output_dir + "IR"+to_string(patch)+"_"+base_filename;
-        outputVillageExtinctionInterval_filenames[vil] = output_dir + "extInts_"+to_string(patch)+"_"+base_filename;
+    for (size_t vil = 0; vil < NUM_OF_VILLAGES; ++vil) {
+        for (size_t state_type = 0; state_type < NUM_OF_STATE_TYPES; ++state_type) {
+            output_filenames[state_type][vil] = output_dir + state_as_string[state_type] + to_string(vil + 1) + "_" + base_filename;
+        }
+        outputVillageExtinctionInterval_filenames[vil] = output_dir + "extInts_" + to_string(vil + 1) + "_" + base_filename;
     }
 
     for (int ot_idx = 0; ot_idx < NUM_OF_QUANTOUTPUT_TYPES; ++ot_idx) {
         const QuantOutputType ot = (QuantOutputType) ot_idx;
-        //const OutputType ot = CIRCULATION_INTERVAL_OUT;
+        //const OutputType ot = CIRCULATION_INTERVAL;
         ofstream ofs;
         ofs.open(outputQuant_filenames[ot]);
         ofs << outputQuant_streams[ot].rdbuf();
         ofs.close();
     }
-    for (int vil = 0; vil < NUM_OF_VILLAGES; vil++) {
+    for (size_t vil = 0; vil < NUM_OF_VILLAGES; vil++) {
         vector<ofstream> ofs(NUM_OF_STATE_TYPES);
         ofstream ofExt;
 
@@ -409,23 +409,18 @@ void output_results(vector<vector<stringstream>> &output_streams, vector<strings
 void log_recovery_event(const vector<vector<int>> &state_data, const unsigned int village, const double obs_time, vector<double> &villageExtinctionTimes, vector<double> &transmissionIntervals, vector<double> &extinctionIntervals, const double reinfectTime, const double lastPCase) {
     if (obs_time > 0) {
         const double extinctionTime = obs_time;
-        if (state_data[I1][village] + state_data[IR][village] == 0) {
-            villageExtinctionTimes[village] = extinctionTime;
-        }
+        if (zero_local_infections(state_data, village)) { villageExtinctionTimes[village] = extinctionTime; }
+
         if (zero_infections(state_data)) {
-            if (reinfectTime!=numeric_limits<double>::max()) {
-                transmissionIntervals.push_back(extinctionTime - reinfectTime);
-            }
-            if (lastPCase!= numeric_limits<double>::max()) {
-                extinctionIntervals.push_back(extinctionTime - lastPCase);
-            }
+            if (reinfection_observed(reinfectTime)) { transmissionIntervals.push_back(extinctionTime - reinfectTime); }
+            if (paralytic_case_observed(lastPCase)) { extinctionIntervals.push_back(extinctionTime - lastPCase); }
         }
     }
 }
 
 void append_output(vector<vector<vector<int>>> &output, const vector<vector<int>> &state_data) {
-    for (unsigned int state = 0; state < NUM_OF_STATE_TYPES; ++state) {
-        for (int vil = 0; vil < NUM_OF_VILLAGES; vil++) {
+    for (size_t state = 0; state < NUM_OF_STATE_TYPES; ++state) {
+        for (size_t vil = 0; vil < NUM_OF_VILLAGES; vil++) {
             output[state][vil].push_back(state_data[state][vil]);
         }
     }
@@ -439,7 +434,7 @@ void event_handler(const VillageEvent &ve, vector<vector<int>> &state_data, vect
             //check to see if paralytic case occurs
             if (obs_time > 0) {//start keeping track after burn in
                 if (runif(RNG) < PIR*DET_RATE) {
-                    if (lastPCase != numeric_limits<double>::max()) {
+                    if (paralytic_case_observed(lastPCase)) {
                         timeBetweenPCases.push_back(obs_time - lastPCase);
                     }
                     lastPCase = obs_time;
@@ -546,11 +541,11 @@ int main() {
         lastPCase = numeric_limits<double>::max(); //initialize to largest double
         reinfectTime = numeric_limits<double>::max(); //initialize to largest double
 
-        for (int vil=0; vil<NUM_OF_VILLAGES; vil++) {
+        for (size_t vil = 0; vil < NUM_OF_VILLAGES; ++vil) {
             villageExtinctionTimes[vil] = numeric_limits<double>::max(); //initialize to largest double
         }
 
-        for (int vil = 0; vil < NUM_OF_VILLAGES; vil++) {
+        for (size_t vil = 0; vil < NUM_OF_VILLAGES; ++vil) {
             //set initial values for each village using multinomial dist
             //initialValues[vil] = multinomial_Compartments(compartments[vil].size(),compartments[vil],vil,RNG());
             state_data[S][vil]        = (int) (0.99*village_pop[vil]);   //naive susceptible (no previous contact w/virus, moves into I1)
@@ -588,7 +583,7 @@ int main() {
                     //determine state of system at beginning of burn in
                     //if there are infected individuals start clock for transmission interval
                     //if not, wait until there are infected individuals
-                    for (int vil = 0; vil < NUM_OF_VILLAGES; vil++) {
+                    for (size_t vil = 0; vil < NUM_OF_VILLAGES; vil++) {
                         if (zero_local_infections(state_data, vil)) {
                             villageExtinctionTimes[vil] = 0; // t = 0 relative to observation period
                         }
@@ -620,17 +615,17 @@ int main() {
                     timeVec.push_back(obs_time);
                     append_output(output, state_data);
                     for (unsigned int vil = 0; vil < (unsigned) NUM_OF_VILLAGES; vil++) {
-                        if (zero_local_infections(state_data, vil) and villageExtinctionTimes[vil] != numeric_limits<double>::max()) {
+                        if (zero_local_infections(state_data, vil) and extinction_observed(villageExtinctionTimes[vil])) {
                             villageExtinctionIntervals[vil].push_back(obs_time - villageExtinctionTimes[vil]);
                         }
                     }
                     //output extinction time
-                    outputQuant_stream[EXTINCTION_TIME_OUT] << obs_time <<endl;
+                    outputQuant_stream[EXTINCTION_TIME] << obs_time <<endl;
                     //output time increments
                     for (unsigned int tLength = 0; tLength < timeVec.size(); tLength++) {
-                        outputQuant_stream[TIME_OUT]<<timeVec[tLength]<<SEP;
+                        outputQuant_stream[TIME]<<timeVec[tLength]<<SEP;
                     }
-                    outputQuant_stream[TIME_OUT]<<endl;
+                    outputQuant_stream[TIME]<<endl;
 
                     for (unsigned int vil = 0; vil < (unsigned) NUM_OF_VILLAGES; vil++) {
                         //output population counts
@@ -653,31 +648,31 @@ int main() {
 
                     //output intervals representing time between paralytic cases
                     for (unsigned int interval = 0; interval < timeBetweenPCases.size(); interval++) {
-                        outputQuant_stream[TIME_BETWEEN_PCASES_OUT] << timeBetweenPCases[interval];
+                        outputQuant_stream[TIME_BETWEEN_PCASES] << timeBetweenPCases[interval];
                         if (interval < timeBetweenPCases.size() - 1) {
-                            outputQuant_stream[TIME_BETWEEN_PCASES_OUT]<< SEP;
+                            outputQuant_stream[TIME_BETWEEN_PCASES]<< SEP;
                         }
                     }
-                    outputQuant_stream[TIME_BETWEEN_PCASES_OUT] << endl;
+                    outputQuant_stream[TIME_BETWEEN_PCASES] << endl;
 
                     //output transmission intervals
                     for (unsigned int interval = 0; interval < transmissionIntervals.size(); interval++) {
-                        outputQuant_stream[TRANSMISSION_INTERVAL_OUT] << transmissionIntervals[interval];
+                        outputQuant_stream[TRANSMISSION_INTERVAL] << transmissionIntervals[interval];
                         if (interval < transmissionIntervals.size() - 1) {
-                            outputQuant_stream[TRANSMISSION_INTERVAL_OUT] << SEP;
+                            outputQuant_stream[TRANSMISSION_INTERVAL] << SEP;
                         }
                     }
-                    outputQuant_stream[TRANSMISSION_INTERVAL_OUT] << endl;
+                    outputQuant_stream[TRANSMISSION_INTERVAL] << endl;
 
                     //output extinction intervals
                     for (unsigned int interval = 0; interval < extinctionIntervals.size(); interval++) {
                         assert(extinctionIntervals[interval] >= 0);
-                        outputQuant_stream[EXTINCTION_INTERVAL_OUT] << extinctionIntervals[interval];
+                        outputQuant_stream[EXTINCTION_INTERVAL] << extinctionIntervals[interval];
                         if (interval < extinctionIntervals.size() - 1) {
-                            outputQuant_stream[EXTINCTION_INTERVAL_OUT]<< SEP;
+                            outputQuant_stream[EXTINCTION_INTERVAL]<< SEP;
                         }
                     }
-                    outputQuant_stream[EXTINCTION_INTERVAL_OUT] << endl;
+                    outputQuant_stream[EXTINCTION_INTERVAL] << endl;
 
                     //clear vectors when done
                     timeVec.clear();
