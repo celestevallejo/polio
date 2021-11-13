@@ -357,7 +357,7 @@ inline void process_reintroduction_event(vector<vector<int>> &state_data, const 
 
 }
 
-void output_results(vector<vector<stringstream>> &output_streams, vector<stringstream> &outputVillageExtinctionInterval_stream, vector<stringstream> &outputQuant_streams) {
+void output_results(vector<vector<stringstream>> &output_streams, vector<stringstream> &outputVillageExtinctionInterval_stream, vector<stringstream> &outputQuant_streams, vector<stringstream> &output_interval_streams) {
     string numInEachVil = "";
     for (size_t i = 0; i < NUM_OF_VILLAGES; ++i) {
         cout << "num in each vil" << village_pop[i] << "\n";
@@ -382,6 +382,11 @@ void output_results(vector<vector<stringstream>> &output_streams, vector<strings
         outputQuant_filenames[output_type] = output_dir + quant_output_as_string[output_type] + base_filename;
     }
 
+    vector<string> output_interval_filenames(NUM_OF_INTERVAL_TYPES);
+    for (size_t output_type = 0; output_type < output_interval_filenames.size(); ++output_type) {
+        output_interval_filenames[output_type] = output_dir + interval_as_string[output_type] + base_filename;
+    }
+
     for (size_t vil = 0; vil < NUM_OF_VILLAGES; ++vil) {
         for (size_t state_type = 0; state_type < NUM_OF_STATE_TYPES; ++state_type) {
             output_filenames[state_type][vil] = output_dir + state_as_string[state_type] + to_string(vil + 1) + "_" + base_filename;
@@ -389,27 +394,29 @@ void output_results(vector<vector<stringstream>> &output_streams, vector<strings
         outputVillageExtinctionInterval_filenames[vil] = output_dir + "extInts_" + to_string(vil + 1) + "_" + base_filename;
     }
 
-    for (int ot_idx = 0; ot_idx < NUM_OF_QUANT_OUTPUT_TYPES; ++ot_idx) {
-        const QuantOutputType ot = (QuantOutputType) ot_idx;
-        // const OutputType ot = CIRCULATION_INTERVAL;
-        ofstream ofs;
+    ofstream ofs;
+    for (int ot = 0; ot < NUM_OF_QUANT_OUTPUT_TYPES; ++ot) {
         ofs.open(outputQuant_filenames[ot]);
         ofs << outputQuant_streams[ot].rdbuf();
         ofs.close();
     }
-    for (size_t vil = 0; vil < NUM_OF_VILLAGES; ++vil) {
-        vector<ofstream> ofs(NUM_OF_STATE_TYPES);
-        ofstream ofExt;
 
+    for (int ot = 0; ot < NUM_OF_INTERVAL_TYPES; ++ot) {
+        ofs.open(output_interval_filenames[ot]);
+        ofs << output_interval_streams[ot].rdbuf();
+        ofs.close();
+    }
+
+    for (size_t vil = 0; vil < NUM_OF_VILLAGES; ++vil) {
         for (unsigned int state = 0; state < NUM_OF_STATE_TYPES; ++state) {
-            ofs[state].open(output_filenames[state][vil]);
-            ofs[state] << output_streams[state][vil].rdbuf();
-            ofs[state].close();
+            ofs.open(output_filenames[state][vil]);
+            ofs << output_streams[state][vil].rdbuf();
+            ofs.close();
         }
 
-        ofExt.open(outputVillageExtinctionInterval_filenames[vil]);
-        ofExt << outputVillageExtinctionInterval_stream[vil].rdbuf();
-        ofExt.close();
+        ofs.open(outputVillageExtinctionInterval_filenames[vil]);
+        ofs << outputVillageExtinctionInterval_stream[vil].rdbuf();
+        ofs.close();
     }
 }
 
@@ -491,7 +498,7 @@ int main() {
     for (unsigned int state = 0; state < NUM_OF_STATE_TYPES; ++state) { output_streams.push_back(vector<stringstream>(NUM_OF_VILLAGES)); }
 
     vector<stringstream> outputQuant_stream(NUM_OF_QUANT_OUTPUT_TYPES);
-
+    vector<stringstream> output_interval_streams(NUM_OF_INTERVAL_TYPES);
     vector<stringstream> outputVillageExtinctionInterval_stream(NUM_OF_VILLAGES);
 
     // initialize size of vectors for individual compartments
@@ -514,9 +521,9 @@ int main() {
         double previousTime = 0.0;
         double burn_in      = -DBL_MAX;                 // don't know yet exactly how long burn-in will be.  burn_in ends with first event after MIN_BURN_IN
         double obs_time     = -DBL_MAX;                 // time measured since burn-in
-        lastPCase = numeric_limits<double>::max();
-        reinfectTime = numeric_limits<double>::max();
-        villageExtinctionTimes = vector<double>(NUM_OF_VILLAGES, numeric_limits<double>::max());
+        lastPCase           = DBL_MAX;
+        reinfectTime        = DBL_MAX;
+        villageExtinctionTimes = vector<double>(NUM_OF_VILLAGES, DBL_MAX);
         
         for (size_t vil = 0; vil < NUM_OF_VILLAGES; ++vil) {
             // set initial values for each village using multinomial dist
@@ -615,14 +622,14 @@ int main() {
 
                     // output time increments
                     for (unsigned int tLength = 0; tLength < timeVec.size(); ++tLength) { outputQuant_stream[TIME] << timeVec[tLength] << SEP; }
-                    outputQuant_stream[TIME]<<endl;
+                    outputQuant_stream[TIME] << endl;
 
                     // output interval data
                     for (size_t interval_type = 0; interval_type < NUM_OF_INTERVAL_TYPES; ++interval_type) {
-                        for (size_t i = 0; i < intervals[interval_type].size() - 1; ++i) {
-                            outputQuant_stream[interval_type] << intervals[interval_type][i] << SEP;
+                        for (size_t i = 0; i < intervals[interval_type].size(); ++i) {
+                            output_interval_streams[interval_type] << intervals[interval_type][i] << SEP;
                         }
-                        outputQuant_stream[interval_type] << intervals[interval_type].back() << endl;
+                        output_interval_streams[interval_type] << endl;
                     }
 
                     // clear vectors when done
@@ -637,6 +644,6 @@ int main() {
         }
     }
     assert(eps_intercase_ivls.size() == eps_circ_ivls.size());
-    output_results(output_streams, outputVillageExtinctionInterval_stream, outputQuant_stream);
+    output_results(output_streams, outputVillageExtinctionInterval_stream, outputQuant_stream, output_interval_streams);
     return 0;
 }
