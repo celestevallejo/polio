@@ -460,7 +460,10 @@ void event_handler(const VillageEvent &ve, vector<vector<int>> &state_data, vect
             process_death_event(state_data, v, obs_time, intervals, reinfectTime, lastPCase, villageExtinctionTimes, RNG);
             break;
         case MOVE_EVENT: {
-            uint other = rand_nonuniform_uint(village_pop, RNG);
+            vector<int> weights(village_pop);
+            weights[v] = 0;
+            uint other = rand_nonuniform_uint(weights, RNG); // there was a bug here; we were allowing the "other" village to be the same as v, nullifying the movement event
+                                                              // this meant that if there were fewer villages, more movement events were thrown out
             process_movement_event(state_data, {v, other}, obs_time, villageExtinctionTimes, villageExtinctionIntervals, RNG); }
             break;
         case REINTRODUCTION_EVENT: {
