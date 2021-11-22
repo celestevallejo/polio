@@ -87,15 +87,86 @@ const map<EventType, pair<StateType, StateType>> transitions = {{FIRST_INFECTION
                                                                 {RECOVERY_FROM_REINFECTION_EVENT,     {IR, R}},
                                                                 {WANING_EVENT,                        {R, P}}};
 
-struct Params{
-    double recovery;
-    double beta;
-    double birth;
-    double death;
-    double kappa;
-    double rho;
-    vector<int> Population;
+class Parameters {
+  public:
+    Parameters(double _kappa, double _rho, size_t _numDaysToRecover, size_t _beta, double _pir, size_t _detRate, double _reintroduceRate,
+               size_t _burnInTime, size_t _obsTime, double _seasonalAmp, size_t _numSims, size_t _movModel, size_t _expTimeUntilMov,
+               double _envSurv, double _vacRate, vector<int> _vilPop) {
+        kappa = _kappa;
+        rho = _rho;
+        numDaysToRecover = _numDaysToRecover;
+        beta = _beta;
+        pir = _pir;
+        detRate = _detRate;
+        reintroduceRate = _reintroduceRate;
+        burnInTime = _burnInTime;
+        obsTime = _obsTime;
+        seasonalAmp = _seasonalAmp;
+        numSims = _numSims;
+        movModel = _movModel;
+        expTimeUntilMov = _expTimeUntilMov;
+        envSurv = _envSurv;
+        vacRate = _vacRate;
+        vilPop = _vilPop;
+    }
+
+    double kappa, rho, pir, reintroduceRate, seasonalAmp, envSurv, vacRate;
+    size_t numDaysToRecover, beta, detRate, burnInTime, obsTime, numSims, movModel, expTimeUntilMov;
+    vector<int> vilPop;
+
 };
+
+vector<int> vectorize_vilPop(string vilPopStr) {
+    // removes all curly braces from the string
+    // expected input format eg: {32000,32000}
+    vilPopStr.erase(remove(vilPopStr.begin(), vilPopStr.end(), '{'), vilPopStr.end());
+    vilPopStr.erase(remove(vilPopStr.begin(), vilPopStr.end(), '}'), vilPopStr.end());
+
+    // splits string by commas and saves as a vector of ints
+    vector<int> vilPop;
+    stringstream ss(vilPopStr);
+    string token;
+    while (getline(ss, token, ',')) {
+        vilPop.push_back(stoi(token));
+    }
+
+    return vilPop;
+}
+
+Parameters* parse_params(string filename, size_t par_line) {
+    double kappa, rho, pir, reintroduceRate, seasonalAmp, envSurv, vacRate;
+    size_t numDaysToRecover, beta, detRate, burnInTime, obsTime, numSims, movModel, expTimeUntilMov;
+    string vilPopStr;
+
+    ifstream iss(filename);
+    if (!iss) {
+        cerr << "ERROR: " << filename << " not found." << endl;
+        exit(-101);
+    }
+
+    string buffer;
+    istringstream line;
+    int line_ct = -1;
+    Parameters* par = nullptr;
+    while (getline(iss, buffer)) {
+        ++line_ct;
+        if (line_ct == (int) par_line) {
+            line.clear();
+            line.str(buffer);
+
+            if (line >> kappa >> rho >> numDaysToRecover >> beta >> pir >> detRate >> reintroduceRate >> burnInTime >> obsTime >> seasonalAmp
+                     >> numSims >> movModel >> expTimeUntilMov >> envSurv >> vacRate >> vilPopStr) {
+                vector<int> vilPop = vectorize_vilPop(vilPopStr);
+                par = new Parameters(kappa, rho, numDaysToRecover, beta, pir, detRate, reintroduceRate, burnInTime, obsTime, seasonalAmp, numSims, movModel, expTimeUntilMov, envSurv, vacRate, vilPop);
+                break;
+            } else {
+                cerr << "ERROR: no parameter combination found." << endl;
+                exit(-102);
+            }
+        }
+    }
+    return par;
+}
 
 struct VillageEvent{
     EventType event_type;
@@ -501,6 +572,17 @@ void event_handler(const VillageEvent &ve, vector<vector<int>> &state_data, vect
 
 
 int main() {
+
+    Parameters* par = parse_params("parameters.txt", 6);
+
+//cerr << par->kappa << ' ' << par->rho << ' ' << par->numDaysToRecover << ' ' << par->beta << ' ' << par->pir << ' ' << par->detRate << ' ' << par->reintroduceRate << ' ' << par->burnInTime << ' ' << par->obsTime
+//     << ' ' << par->seasonalAmp << ' ' << par->numSims << ' ' << par->movModel << ' ' << par->expTimeUntilMov << ' ' << par->envSurv << ' ' << par->vacRate << ' ';
+//for (int vp : par->vilPop) {
+//    cerr << vp << ' ';
+//}
+//cerr << endl;
+//exit(-565);
+
     // TODO -- review what data is being used and for what.  we may not need everything we're outputting
     // vectors for holding information to be output
     vector<vector<vector<int>>> output(NUM_OF_STATE_TYPES, vector<vector<int>>(NUM_OF_VILLAGES));
