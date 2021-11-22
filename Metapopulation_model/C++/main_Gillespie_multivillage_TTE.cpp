@@ -82,8 +82,8 @@ inline std::ostream& operator<<(std::ostream& out, const IntervalType value){ re
 
 
 const map<EventType, pair<StateType, StateType>> transitions = {{FIRST_INFECTION_EVENT,               {S, I1}},
-                                                                {REINFECTION_EVENT,                   {P, IR}}, 
-                                                                {RECOVERY_FROM_FIRST_INFECTION_EVENT, {I1, R}}, 
+                                                                {REINFECTION_EVENT,                   {P, IR}},
+                                                                {RECOVERY_FROM_FIRST_INFECTION_EVENT, {I1, R}},
                                                                 {RECOVERY_FROM_REINFECTION_EVENT,     {IR, R}},
                                                                 {WANING_EVENT,                        {R, P}}};
 
@@ -132,7 +132,8 @@ const double RHO                   = 0.2;                   // waning speed para
 
 // other parameters
 const vector<int> village_pop      = {100000, 100000};
-const size_t NUM_OF_VILLAGES          = village_pop.size(); // total number of villages under consideration
+const double TOTAL_POP             = accumulate(village_pop.begin(), village_pop.end(), 0.0);
+const size_t NUM_OF_VILLAGES       = village_pop.size(); // total number of villages under consideration
 const int numDaysToRecover         = 28;
 const double RECOVERY              = 365/numDaysToRecover;  // recovery rate (/year)
 const double BETA                  = 135;                   // contact rate (individuals/year)
@@ -150,6 +151,8 @@ const double OBS_PERIOD            = 50;                    // years
 const double SEASONALITY           = 0.0;
 const int NUM_OF_SIMS              = 4;
 const bool RETRY_SIMS              = false;
+const bool STRICT_TRAVEL           = true;                  // true: movement means moving to another patch; false: movement (implicitly) can mean moving within a patch
+                                                            // original results were produced with the latter (STRICT_TRAVEL==false) interpretation
 
 bool extinction_observed(double val)     { return val != numeric_limits<double>::max(); }
 bool reinfection_observed(double val)    { return val != numeric_limits<double>::max(); }
@@ -203,6 +206,9 @@ vector<double> calculate_village_rates(const vector<vector<int>> &state_data, co
     local_event_rates[WANING_EVENT]                         = RHO*R_;                          // waning event
     local_event_rates[DEATH_EVENT]                          = DEATH*village_pop[village];      // natural death
     local_event_rates[MOVE_EVENT]                           = MOVE_RATE*village_pop[village];  // rate of movement from village
+    if (not STRICT_TRAVEL) {
+        local_event_rates[MOVE_EVENT] *= (TOTAL_POP - village_pop[village]) / TOTAL_POP;   // if people can "move" to their own village
+    }
 
     if (time < MIN_BURN_IN) {
         local_event_rates[REINTRODUCTION_EVENT]             = REINTRODUCTION_RATE*village_pop[village]; // rate of reintroduction into system
@@ -310,18 +316,16 @@ StateType sample_migrant(vector<vector<int>> &state_data, const int village, mt1
 inline void process_movement_event(vector<vector<int>> &state_data, vector<unsigned int> vil_pair, const double obs_time, vector<double> &villageExtinctionTimes, vector<vector<double>> &villageExtinctionIntervals, mt19937& RNG) {
     const unsigned int vil_A = vil_pair[0];
     const unsigned int vil_B = vil_pair[1];
+    assert(vil_A != vil_B);
+    vector<int> weights(NUM_OF_STATE_TYPES, 0);
 
-    if (vil_A != vil_B) {
-        vector<int> weights(NUM_OF_STATE_TYPES, 0);
+    // Sample states of people to move from A to B and vice versa
+    const StateType state_A = sample_migrant(state_data, vil_pair[0], RNG);
+    const StateType state_B = sample_migrant(state_data, vil_pair[1], RNG);
 
-        // Sample states of people to move from A to B and vice versa
-        const StateType state_A = sample_migrant(state_data, vil_pair[0], RNG);
-        const StateType state_B = sample_migrant(state_data, vil_pair[1], RNG);
-
-        if (state_A != state_B) {
-            move_from_A_to_B(state_data, {vil_A, vil_B}, {state_A, state_B}, obs_time, villageExtinctionIntervals, villageExtinctionTimes);
-            move_from_A_to_B(state_data, {vil_B, vil_A}, {state_B, state_A}, obs_time, villageExtinctionIntervals, villageExtinctionTimes);
-        }
+    if (state_A != state_B) {
+        move_from_A_to_B(state_data, {vil_A, vil_B}, {state_A, state_B}, obs_time, villageExtinctionIntervals, villageExtinctionTimes);
+        move_from_A_to_B(state_data, {vil_B, vil_A}, {state_B, state_A}, obs_time, villageExtinctionIntervals, villageExtinctionTimes);
     }
 }
 
@@ -337,7 +341,8 @@ void process_reintroduction_helper(const StateType from, const StateType to, con
     --state_data[from][village]; ++state_data[to][village];
 }
 
-bool is_detected(StateType state, mt19937& RNG) {
+bool is_detected(StateType previous_state, mt19937& RNG) {
+    assert(previous_state == S);
     return runif(RNG) < PIR * DET_RATE[0]; // currently only for paralytic infections
 }
 
@@ -354,7 +359,7 @@ inline void process_reintroduction_event(vector<vector<int>> &state_data, const 
         process_reintroduction_helper(S, I1, obs_time, state_data, village, reinfectTime, villageExtinctionIntervals, villageExtinctionTimes);
 
         if (obs_time > 0) {// start keeping track after burn in
-            if (runif(RNG) < PIR * DET_RATE[0]) {
+            if (is_detected(state, RNG)) {
                 if (paralytic_case_observed(lastPCase)) {
                     pcaseInterval.push_back(obs_time - lastPCase);
                 }
@@ -375,7 +380,7 @@ void output_results(vector<vector<stringstream>> &output_streams, vector<strings
     }
 
     string base_filename = numInEachVil + "reintRate_" + to_string(REINTRODUCTION_RATE) + "migRate_" + to_string(MOVE_RATE)+ext;
-    string parameters = "beta_" + to_string(int(BETA)) + "detect_rate_" + to_string(float(DET_RATE[0])) + "rho_" + to_string(float(RHO)) + 
+    string parameters = "beta_" + to_string(int(BETA)) + "detect_rate_" + to_string(float(DET_RATE[0])) + "rho_" + to_string(float(RHO)) +
                         "NUM_OF_VILLAGES_" + to_string(NUM_OF_VILLAGES) + "migRate_" + to_string(float(MOVE_RATE)) + "burnIn_" + to_string(MIN_BURN_IN) +
                         "obsTime_" + to_string(OBS_PERIOD) + "seasonality_" + to_string(SEASONALITY);
     // read parameters into database file
@@ -445,12 +450,14 @@ void detect_infection() {
 void event_handler(const VillageEvent &ve, vector<vector<int>> &state_data, vector<vector<double>> &intervals, const double obs_time, double &lastPCase, vector<double> &villageExtinctionTimes, vector<vector<double>> &villageExtinctionIntervals, double &reinfectTime, mt19937& RNG) {
     const unsigned int v = ve.village;
     const EventType et   = ve.event_type;
+    StateType prev_state = NUM_OF_STATE_TYPES;
     StateType new_state  = NUM_OF_STATE_TYPES;
 
     // transitions that are known exactly at this point are handled here
     if (transitions.count(et) > 0) {
-        new_state = transitions.at(et).second;
-        --state_data[transitions.at(et).first][v];
+        prev_state = transitions.at(et).first;
+        new_state  = transitions.at(et).second;
+        --state_data[prev_state][v];
         ++state_data[new_state][v];
     }
 
@@ -458,7 +465,7 @@ void event_handler(const VillageEvent &ve, vector<vector<int>> &state_data, vect
         case FIRST_INFECTION_EVENT:{
             // check to see if paralytic case occurs and is detected
             if (obs_time > 0) {// start keeping track after burn in
-                if (runif(RNG) < PIR * DET_RATE[0]) {
+                if (is_detected(prev_state, RNG)) {
                     if (paralytic_case_observed(lastPCase)) {
                         intervals[PCASE_INTERVAL].push_back(obs_time - lastPCase);
                     }
@@ -467,7 +474,7 @@ void event_handler(const VillageEvent &ve, vector<vector<int>> &state_data, vect
             }
         }
             break;
-        case RECOVERY_FROM_FIRST_INFECTION_EVENT: [[fallthrough]]
+        case RECOVERY_FROM_FIRST_INFECTION_EVENT: //[[fallthrough]]
         case RECOVERY_FROM_REINFECTION_EVENT:
             log_event(state_data, v, obs_time, intervals, villageExtinctionTimes, reinfectTime, lastPCase);
             break;
@@ -542,7 +549,7 @@ int main() {
         lastPCase           = DBL_MAX;
         reinfectTime        = DBL_MAX;
         villageExtinctionTimes = vector<double>(NUM_OF_VILLAGES, DBL_MAX);
-        
+
         for (size_t vil = 0; vil < NUM_OF_VILLAGES; ++vil) {
             // set initial values for each village using multinomial dist
             //initialValues[vil] = multinomial_Compartments(compartments[vil].size(),compartments[vil],vil,RNG());
