@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+import zlib
+
 # STATIC PARAMETERS
 kappa            = 0.4179
 rho              = 0.2
@@ -32,7 +34,7 @@ villagePop              = [[64000],
 outputFilename = 'parameters.txt'
 
 with open(outputFilename, 'w') as outFile:
-    outFile.write('kappa rho numDaysToRecover beta deathRate pir AFP_Detection reintroRate minBurnIn obsPeriod seasonalAmp numSims movModel moveRate ES_Detection vacRate vilPop\n')
+    outFile.write('cksum kappa rho numDaysToRecover beta deathRate pir AFP_Detection reintroRate minBurnIn obsPeriod seasonalAmp numSims movModel moveRate ES_Detection vacRate vilPop\n')
     for mm in movementModel:
         for mr in movementRate:
             for es in ES_Detection:
@@ -45,5 +47,8 @@ with open(outputFilename, 'w') as outFile:
                                 vilPopStr += ','
                     
                         vilPopStr += '}'
-                        outStr = f'{kappa} {rho} {numDaysToRecover} {beta} {deathRate} {pir} {AFP_Detection} {reintroRate} {minBurnIn} {obsPeriod} {seasonalAmp} {numSims} {mm} {mr} {es} {vr} {vilPopStr}\n'
+                        paramStr = f'{kappa} {rho} {numDaysToRecover} {beta} {deathRate} {pir} {AFP_Detection} {reintroRate} {minBurnIn} {obsPeriod} {seasonalAmp} {numSims} {mm} {mr} {es} {vr} {vilPopStr}'
+
+                        cksum = hex(zlib.crc32(paramStr.encode()))[2:]
+                        outStr = f'{cksum} {paramStr}\n'
                         outFile.write(outStr)
