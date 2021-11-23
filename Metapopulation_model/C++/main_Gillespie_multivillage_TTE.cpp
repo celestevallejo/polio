@@ -65,13 +65,23 @@ inline std::ostream& operator<<(std::ostream& out, const EventType value){ retur
 
 
 #define REPORTABLE_EVENT_TYPE(VAR) \
-    VAR(ES_DETECTED_INFECTION) \
-    VAR(PARALYTIC_DETECTED_INFECTION) \
+    VAR(FIRST_INFECTION) \
+    VAR(REINFECTION)\
     VAR(EXTINCTION) \
     VAR(NUM_OF_REPORTABLE_EVENTS)
 enum ReportableEventType{ REPORTABLE_EVENT_TYPE(MAKE_ENUM) };
 const char* const reportable_event_as_string[] = { REPORTABLE_EVENT_TYPE(MAKE_STRINGS) };
 inline std::ostream& operator<<(std::ostream& out, const ReportableEventType value){ return out << reportable_event_as_string[value]; }
+
+
+#define DETECTION_TYPE(VAR) \
+    VAR(AFP_DETECTION) \
+    VAR(ES_DETECTION) \
+    VAR(EXTINCTION_DETECTION) \
+    VAR(NUM_OF_DETECTION_TYPES)
+enum DetectionType{ DETECTION_TYPE(MAKE_ENUM) };
+const char* const detection_as_string[] = { DETECTION_TYPE(MAKE_STRINGS) };
+inline std::ostream& operator<<(std::ostream& out, const DetectionType value){ return out << detection_as_string[value]; }
 
 
 const map<EventType, pair<StateType, StateType>> TRANSITIONS = {{FIRST_INFECTION_EVENT,               {S, I1}},
@@ -82,14 +92,14 @@ const map<EventType, pair<StateType, StateType>> TRANSITIONS = {{FIRST_INFECTION
 
 class Parameters {
   public:
-    Parameters(double _kappa, double _rho, double _numDaysToRecover, double _beta, double _deathRate, double _pir, double _AFP_det, double _reintroRate,
+    Parameters(double _kappa, double _rho, double _numDaysToRecover, double _beta, double _deathRate, double _PIR, double _AFP_det, double _reintroRate,
                double _minBurnIn, double _obsPeriod, double _seasonalAmp, size_t _numSims, size_t _movModel, double _moveRate, double _ES_det, double _vacRate, vector<int> _village_pop) {
         kappa = _kappa;
         rho = _rho;
         numDaysToRecover = _numDaysToRecover;
         beta = _beta;
         deathRate = _deathRate;
-        pir = _pir;
+        PIR = _PIR;
         AFP_det = _AFP_det;
         reintroRate = _reintroRate;
         minBurnIn = _minBurnIn;
@@ -105,10 +115,26 @@ class Parameters {
         totalPop = accumulate(village_pop.begin(), village_pop.end(), 0.0);
     }
 
-    double kappa, rho, pir, reintroRate, seasonalAmp, ES_det, vacRate, beta, deathRate, numDaysToRecover, AFP_det, minBurnIn, obsPeriod, moveRate;
+    double kappa, rho, PIR, reintroRate, seasonalAmp, ES_det, vacRate, beta, deathRate, numDaysToRecover, AFP_det, minBurnIn, obsPeriod, moveRate;
     size_t numSims, movModel, numVillages;
     double totalPop;
     vector<int> village_pop;
+};
+
+class DailyDetectedEvents {
+  public:
+    DailyDetectedEvents() {
+        day = 0;
+        detection_events = vector<int>(NUM_OF_DETECTION_TYPES, 0);
+    };
+
+    DailyDetectedEvents(int d) {
+        day = d;
+        detection_events = vector<int>(NUM_OF_DETECTION_TYPES, 0);
+    };
+
+    int day;
+    vector<int> detection_events;
 };
 
 vector<int> vectorize_village_pop(string village_pop_str) {
@@ -129,7 +155,7 @@ vector<int> vectorize_village_pop(string village_pop_str) {
 }
 
 Parameters* parse_params(string filename, size_t par_line) {
-    double kappa, rho, pir, reintroRate, seasonalAmp, ES_det, vacRate, numDaysToRecover, beta, deathRate, AFP_det, minBurnIn, obsPeriod, moveRate;
+    double kappa, rho, PIR, reintroRate, seasonalAmp, ES_det, vacRate, numDaysToRecover, beta, deathRate, AFP_det, minBurnIn, obsPeriod, moveRate;
     size_t numSims, movModel;
     string village_pop_str;
 
@@ -149,10 +175,10 @@ Parameters* parse_params(string filename, size_t par_line) {
             line.clear();
             line.str(buffer);
 
-            if (line >> kappa >> rho >> numDaysToRecover >> beta >> deathRate >> pir >> AFP_det >> reintroRate >> minBurnIn >> obsPeriod >> seasonalAmp
+            if (line >> kappa >> rho >> numDaysToRecover >> beta >> deathRate >> PIR >> AFP_det >> reintroRate >> minBurnIn >> obsPeriod >> seasonalAmp
                      >> numSims >> movModel >> moveRate >> ES_det >> vacRate >> village_pop_str) {
                 vector<int> village_pop = vectorize_village_pop(village_pop_str);
-                par = new Parameters(kappa, rho, numDaysToRecover, beta, deathRate, pir, AFP_det, reintroRate, minBurnIn, obsPeriod, seasonalAmp, numSims, movModel, moveRate, ES_det, vacRate, village_pop);
+                par = new Parameters(kappa, rho, numDaysToRecover, beta, deathRate, PIR, AFP_det, reintroRate, minBurnIn, obsPeriod, seasonalAmp, numSims, movModel, moveRate, ES_det, vacRate, village_pop);
                 break;
             } else {
                 cerr << "ERROR: did not find valid parameter combination.  Found: " << buffer << endl;
@@ -224,12 +250,10 @@ vector<double> calculate_village_rates(const Parameters* par, const vector<vecto
 
     const double KAPPA                 = par->kappa;            //0.4179;                // waning depth parameter
     const double RHO                   = par->rho;              //0.2;                   // waning speed parameter
-
     const double local_pop             = par->village_pop[village];
     const double RECOVERY              = 365.0/par->numDaysToRecover;// recovery rate (/year)
     const double BETA                  = par->beta;             //135.0;                   // contact rate (individuals/year)
     const double DEATH                 = par->deathRate;        //1.0/lifespan;          // death rate (per year)
-//    const double ES_DET                = par->ES_det;          //
     const double MOVE_RATE             = par->moveRate;         //expectedTimeUntilMove > 0 ? 1/expectedTimeUntilMove : 0;
     const double REINTRODUCTION_RATE   = par->reintroRate;      //1.0/10.0;              // was 0
 //    const double VAC_RATE              = par->vacRate;
@@ -265,9 +289,9 @@ vector<double> calculate_village_rates(const Parameters* par, const vector<vecto
     return local_event_rates;
 }
 
-VillageEvent sample_event(const Parameters* par, double& totalRate, const vector<vector<int>> &state_data, const double time, mt19937& RNG) {
+VillageEvent sample_event(const Parameters* par, const vector<vector<int>> &state_data, const double time, mt19937& RNG) {
     vector<vector<double>> event_rates(par->numVillages, vector<double>(NUM_OF_EVENT_TYPES));
-    totalRate = 0.0;
+    double totalRate = 0.0;
     VillageEvent ve;
     for (size_t vil = 0; vil < par->numVillages; ++vil) {
         event_rates[vil] = calculate_village_rates(par, state_data, vil, time);
@@ -332,11 +356,6 @@ void process_movement_event(const Parameters* par, vector<vector<int>> &state_da
 }
 
 
-bool is_detected(const Parameters* par, StateType previous_state, mt19937& RNG) {
-    assert(previous_state == S);
-    return runif(RNG) < par->pir * par->AFP_det; // currently only for paralytic infections
-}
-
 void process_reintroduction_event(vector<vector<int>> &state_data, const size_t village, mt19937 &RNG) {
     // treat reintroduction as exposure event that is density dependent
     // Sample state of person to whom exposure event will occur
@@ -380,7 +399,7 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
     switch(ve.event_type) {
         case FIRST_INFECTION_EVENT:{
             if (obs_time > 0) {
-                reportable_event_ct[PARALYTIC_DETECTED_INFECTION]++; // will be determined later whether paralytic and detected
+                reportable_event_ct[FIRST_INFECTION]++; // will be determined later whether paralytic and detected
             }
         }
             break;
@@ -410,7 +429,7 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
             break;
         case REINFECTION_EVENT:
             if (obs_time > 0)  {
-                reportable_event_ct[ES_DETECTED_INFECTION]++; // will be determined later whether environmental surveillance occurred
+                reportable_event_ct[REINFECTION]++; // will be determined later whether environmental surveillance occurred
             }
             break;
         case WANING_EVENT: break;
@@ -421,13 +440,28 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
 }
 
 
-int main() {
+void log_output(const vector<DailyDetectedEvents> /*&detected_event_ct_ts*/, const vector<vector<int>> /*&initial_states*/) {
+//serial par_combo replicate village_id village_size S I1 R P IR
 
-    string par_file = "./parameters.txt";
-    size_t par_idx  = 6; // which line in the par file to use
+//serial par_combo replicate day_of_event event_type event_type_ct
+// reportable events include: population-wide extinction (I1 + IR -> 0 during observation period); S->I1 and P->IR
+// possibly will want patch ID as a output dimension
+
+//for (size_t state = 0; state < initial_states.size(); ++state) {
+//   for(size_t village = 0; village < initial_states[state].size(); ++village) {
+//   }
+//}
+
+}
+
+
+int main(int argc, char** argv) {
+    assert(argc == 3);
+    string par_file = argv[1];
+    size_t par_idx  = atoi(argv[2]); // which line in the par file to use
     Parameters* par = parse_params(par_file, par_idx);
 
-//cerr << par->kappa << ' ' << par->rho << ' ' << par->numDaysToRecover << ' ' << par->beta << ' ' << par->pir << ' ' << par->AFP_det << ' ' << par->reintroRate << ' ' << par->minBurnIn << ' ' << par->obsPeriod
+//cerr << par->kappa << ' ' << par->rho << ' ' << par->numDaysToRecover << ' ' << par->beta << ' ' << par->PIR << ' ' << par->AFP_det << ' ' << par->reintroRate << ' ' << par->minBurnIn << ' ' << par->obsPeriod
 //     << ' ' << par->seasonalAmp << ' ' << par->numSims << ' ' << par->movModel << ' ' << par->moveRate << ' ' << par->ES_det << ' ' << par->vacRate << ' ';
 //for (int vp : par->village_pop) {
 //    cerr << vp << ' ';
@@ -438,17 +472,17 @@ int main() {
     // TODO -- review what data is being used and for what.  we may not need everything we're outputting
     // vectors for holding information to be output
 
-    // initialize size of vectors for individual compartments
-    vector<vector<int>> state_data(NUM_OF_STATE_TYPES, vector<int>(par->numVillages, 0.0));
-
-    random_device rd;                                   // generates a random real number for the seed
+    //random_device rd;                                   // generates a random real number for the seed
     // unsigned long int seed = rd();
-    uint seed = 2186064846;
-    cerr << "seed: " << seed << endl;
-    mt19937 RNG(seed);                                  // random number generator
+    const size_t initial_seed = 8675309;
+    //cerr << "seed: " << seed << endl;
 
     // The Simulation
     for (size_t i = 0; i < par->numSims; ++i) {
+        // initialize size of vectors for individual compartments
+        vector<vector<int>> state_data(NUM_OF_STATE_TYPES, vector<int>(par->numVillages, 0.0));
+
+        mt19937 RNG(initial_seed + i);                  // random number generator
         double time         = 0.0;                      // "absolute" time, relative to start of simulation
         double burn_in      = -DBL_MAX;                 // don't know yet exactly how long burn-in will be.  burn_in ends with first event after MIN_BURN_IN
         double obs_time     = -DBL_MAX;                 // time measured since burn-in
@@ -464,54 +498,69 @@ int main() {
             state_data[IR][vil]       = 0;                              // reinfected (recovers into R)
         }
 
-        long long int day_ct = -1;
+        //long long int day_ct = -1;
         const double day_length = 1.0/365.0;
 
         // Two new output files w columns:
         // initial conditions file: serial par_combo replicate village_id village_size S I1 R P IR
         // event data:              serial par_combo replicate day_of_event event_type event_type_ct
-        vector<int> reportable_event_ct = vector<int>(NUM_OF_REPORTABLE_EVENTS, 0);
-        bool continue_sim = true;
-        int total_detected_infections = 0;
+        vector<vector<int>> initial_states;                                                 // for each village, number of people in each compartment just after burn-in
+        vector<int> reportable_event_ct         = vector<int>(NUM_OF_REPORTABLE_EVENTS, 0); // things that *might* be detected
+        vector<DailyDetectedEvents> detected_event_ct_ts;                                   // time series of things that *were* detected
 
-        while (continue_sim) {
-            while (time/day_length > day_ct) { // increment day counter as needed
+        int prev_day                            = 0;
+        int num_days_with_detections            = 0;
+
+        while (true) {
+            const double day = time/day_length;
+            if (obs_time > 0 and (int) day > prev_day) { // 'tis a new day!  tally what happened yesterday
+                DailyDetectedEvents dde(prev_day);
+
+                binomial_distribution<int> AFP_det_binom(reportable_event_ct[FIRST_INFECTION], par->PIR * par->AFP_det);
+                binomial_distribution<int> ES_det_binom(reportable_event_ct[FIRST_INFECTION] + reportable_event_ct[REINFECTION], par->ES_det);
+
+                dde.detection_events[AFP_DETECTION]        = AFP_det_binom(RNG);
+                dde.detection_events[ES_DETECTION]         = ES_det_binom(RNG);
+                dde.detection_events[EXTINCTION_DETECTION] = reportable_event_ct[EXTINCTION];
+
+                bool had_detections = dde.detection_events[AFP_DETECTION] + dde.detection_events[ES_DETECTION] > 0;
+                num_days_with_detections += had_detections;
+
+                detected_event_ct_ts.push_back(dde);
+                reportable_event_ct = vector<int>(NUM_OF_REPORTABLE_EVENTS, 0); // things that *might* be detected
+            }
+
+            /* while (time/day_length > day_ct) { // increment day counter as needed
                 // TODO -- if after burn-in and isNewDay, report extinctions and *detected* infections as appropriate, then clear counts
                 if (day_ct % 100 == 0) {
                     cerr << "step, time, day: " << right << setw(9) << setprecision(3) << time << ", " << setw(6) << day_ct << " | ";
                     cerr_state(state_data, 0);
                 }
                 ++day_ct;
-            }
-
-            double totalRate = 0.0;
-            VillageEvent ve = sample_event(par, totalRate, state_data, time, RNG); // This is where 'time' gets updated
-            event_handler(par, ve, state_data, obs_time, reportable_event_ct, RNG);
-            time = ve.time;
+            } */
 
             if (time > par->minBurnIn) {
                 if (burn_in < 0) { // this is the first event after the burn-in has been completed
                     burn_in = time;
-// CABP - output/store the compartment sizes for all sub pops here, i.e. just after burn in is completed
-                    // determine state of system at beginning of burn in
-                    // if there are infected individuals start clock for transmission interval
-                    // if not, wait until there are infected individuals
+                    initial_states = state_data; // capture state of system at end of burn-in
                 }
                 obs_time = time - burn_in; // here obs_time will always be >= 0.0
 
                 // stopping condition
                 if (zero_infections(state_data) or (obs_time >= par->obsPeriod)) {
-                    // determine if there were no p cases in any villages
-
-                    if (total_detected_infections < 2) { // no intercase interval to report
-                        cerr << "Run failed, <2 infections detected\n\n";
+                    if (num_days_with_detections < 2) { // no intercase intervals to report
+                        cerr << "Run failed, <2 days with detected infections\n\n";
                         if (RETRY_SIMS) { i--; } // CAN RESULT IN AN INFINITE LOOP!!!
                     }
-                    // clear vectors when done
-                    continue_sim = false;
+                    break;
                 }
             }
+
+            VillageEvent ve = sample_event(par, state_data, time, RNG); // This is where 'time' gets updated
+            event_handler(par, ve, state_data, obs_time, reportable_event_ct, RNG);
+            time = ve.time;
         }
+        log_output(detected_event_ct_ts, initial_states);
     }
 //    output_results();
     return 0;
