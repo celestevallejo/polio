@@ -83,8 +83,9 @@ const map<EventType, pair<StateType, StateType>> TRANSITIONS = {{FIRST_INFECTION
 
 class Parameters {
   public:
-    Parameters(double _kappa, double _rho, double _numDaysToRecover, double _beta, double _deathRate, double _pir, double _AFP_det, double _reintroRate,
+    Parameters(string _cksum, double _kappa, double _rho, double _numDaysToRecover, double _beta, double _deathRate, double _pir, double _AFP_det, double _reintroRate,
                double _minBurnIn, double _obsPeriod, double _seasonalAmp, size_t _numSims, size_t _movModel, double _moveRate, double _ES_det, double _vacRate, vector<int> _village_pop) {
+        cksum = _cksum;
         kappa = _kappa;
         rho = _rho;
         numDaysToRecover = _numDaysToRecover;
@@ -107,8 +108,8 @@ class Parameters {
     }
 
     void print_params() {
-        cerr << CERR_VAR(kappa) << ' ' << CERR_VAR(rho) << ' ' << CERR_VAR(numDaysToRecover) << ' ' << CERR_VAR(beta) << ' ' << CERR_VAR(deathRate) << ' '
-             << CERR_VAR(pir) << ' ' << CERR_VAR(AFP_det) << ' ' << CERR_VAR(reintroRate) << endl << ' ' << CERR_VAR(minBurnIn) << ' ' << CERR_VAR(obsPeriod) << ' '
+        cerr << CERR_VAR(cksum) << ' ' << CERR_VAR(kappa) << ' ' << CERR_VAR(rho) << ' ' << CERR_VAR(numDaysToRecover) << ' ' << CERR_VAR(beta) << ' ' << CERR_VAR(deathRate) << ' '
+             << CERR_VAR(pir) << ' ' << CERR_VAR(AFP_det) << ' ' << CERR_VAR(reintroRate) << endl << CERR_VAR(minBurnIn) << ' ' << CERR_VAR(obsPeriod) << ' '
              << CERR_VAR(seasonalAmp) << ' ' << CERR_VAR(numSims) << ' ' << CERR_VAR(movModel) << ' ' << CERR_VAR(moveRate) << ' ' << CERR_VAR(ES_det) << ' '
              << CERR_VAR(vacRate) << endl;
         cerr << "village_pop =";
@@ -118,6 +119,7 @@ class Parameters {
         cerr << ";" << endl;
     }
 
+    string cksum;
     double kappa, rho, pir, reintroRate, seasonalAmp, ES_det, vacRate, beta, deathRate, numDaysToRecover, AFP_det, minBurnIn, obsPeriod, moveRate;
     size_t numSims, movModel, numVillages;
     double totalPop;
@@ -144,7 +146,7 @@ vector<int> vectorize_village_pop(string village_pop_str) {
 Parameters* parse_params(string filename, size_t par_line) {
     double kappa, rho, pir, reintroRate, seasonalAmp, ES_det, vacRate, numDaysToRecover, beta, deathRate, AFP_det, minBurnIn, obsPeriod, moveRate;
     size_t numSims, movModel;
-    string village_pop_str;
+    string cksum, village_pop_str;
 
     ifstream iss(filename);
     if (!iss) {
@@ -162,10 +164,10 @@ Parameters* parse_params(string filename, size_t par_line) {
             line.clear();
             line.str(buffer);
 
-            if (line >> kappa >> rho >> numDaysToRecover >> beta >> deathRate >> pir >> AFP_det >> reintroRate >> minBurnIn >> obsPeriod >> seasonalAmp
+            if (line >> cksum >> kappa >> rho >> numDaysToRecover >> beta >> deathRate >> pir >> AFP_det >> reintroRate >> minBurnIn >> obsPeriod >> seasonalAmp
                      >> numSims >> movModel >> moveRate >> ES_det >> vacRate >> village_pop_str) {
                 vector<int> village_pop = vectorize_village_pop(village_pop_str);
-                par = new Parameters(kappa, rho, numDaysToRecover, beta, deathRate, pir, AFP_det, reintroRate, minBurnIn, obsPeriod, seasonalAmp, numSims, movModel, moveRate, ES_det, vacRate, village_pop);
+                par = new Parameters(cksum, kappa, rho, numDaysToRecover, beta, deathRate, pir, AFP_det, reintroRate, minBurnIn, obsPeriod, seasonalAmp, numSims, movModel, moveRate, ES_det, vacRate, village_pop);
                 par->print_params();
                 break;
             } else {
