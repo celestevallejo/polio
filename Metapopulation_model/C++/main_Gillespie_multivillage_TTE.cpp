@@ -315,7 +315,7 @@ VillageEvent sample_event(const Parameters* par, const vector<vector<int>> &stat
     }
     exponential_distribution<> rexp(totalRate);
     ve.time = time + rexp(RNG);
-
+//cerr << totalRate << " ";
     double ran = totalRate * runif(RNG);
 
     for (size_t event = 0; event < NUM_OF_EVENT_TYPES; ++event) {
@@ -415,11 +415,11 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
     switch(ve.event_type) {
         case FIRST_INFECTION_EVENT:{
             if (obs_time > 0) {
-                reportable_event_ct[FIRST_INFECTION]++; // will be determined later whether paralytic and detected
+                reportable_event_ct[FIRST_INFECTION]++;
             }
         }
             break;
-        case RECOVERY_FROM_FIRST_INFECTION_EVENT: //[[fallthrough]]
+        case RECOVERY_FROM_FIRST_INFECTION_EVENT:   //[[fallthrough]]
         case RECOVERY_FROM_REINFECTION_EVENT:
             if (obs_time > 0 and zero_infections(state_data)) {
                 reportable_event_ct[EXTINCTION]++;
@@ -439,7 +439,7 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
             process_movement_event(par, state_data, village, RNG);
             break;
         case REINTRODUCTION_EVENT:
-            if (obs_time > 0) {
+            if (obs_time < 0) {                     // reintroductions only happen during the burn-in
                 process_reintroduction_event(state_data, village, RNG);
             }
             break;
@@ -494,7 +494,8 @@ int main(int argc, char** argv) {
     //cerr << "seed: " << seed << endl;
 
     // The Simulation
-    for (size_t i = 0; i < par->numSims; ++i) {
+    //for (size_t i = 0; i < par->numSims; ++i) {
+    for (size_t i = 0; i < 1; ++i) {
         // initialize size of vectors for individual compartments
         vector<vector<int>> state_data(NUM_OF_STATE_TYPES, vector<int>(par->numVillages, 0.0));
 
@@ -526,10 +527,16 @@ int main(int argc, char** argv) {
 
         int prev_day                            = 0;
         int num_days_with_detections            = 0;
+        int day_ct                              = 0; // for logging data every day
 
         while (true) {
             const double day = time/day_length;
             if (obs_time > 0 and (int) day > prev_day) { // 'tis a new day!  tally what happened yesterday
+//                if ((int) day % 100 == 0) {
+//                    cerr << "time, day: " << right << setw(9) << setprecision(3) << time << ", " << setw(6) << prev_day << " | ";
+//                    cerr_state(state_data, 0);
+//                }
+
                 DailyDetectedEvents dde(prev_day);
 
                 binomial_distribution<int> AFP_det_binom(reportable_event_ct[FIRST_INFECTION], par->PIR * par->AFP_det);
@@ -544,16 +551,17 @@ int main(int argc, char** argv) {
 
                 detected_event_ct_ts.push_back(dde);
                 reportable_event_ct = vector<int>(NUM_OF_REPORTABLE_EVENTS, 0); // things that *might* be detected
+                prev_day = day;
             }
 
-            /* while (time/day_length > day_ct) { // increment day counter as needed
+            while (day > day_ct) { // increment day counter as needed
                 // TODO -- if after burn-in and isNewDay, report extinctions and *detected* infections as appropriate, then clear counts
-                if (day_ct % 100 == 0) {
-                    cerr << "step, time, day: " << right << setw(9) << setprecision(3) << time << ", " << setw(6) << day_ct << " | ";
+                if (day_ct % 10 == 0) {
+                    cerr << "time, day: " << right << setw(9) << setprecision(3) << time << ", " << setw(6) << day_ct << " | ";
                     cerr_state(state_data, 0);
                 }
                 ++day_ct;
-            } */
+            }
 
             if (time > par->minBurnIn) {
                 if (burn_in < 0) { // this is the first event after the burn-in has been completed
@@ -565,7 +573,7 @@ int main(int argc, char** argv) {
                 // stopping condition
                 if (zero_infections(state_data) or (obs_time >= par->obsPeriod)) {
                     if (num_days_with_detections < 2) { // no intercase intervals to report
-                        cerr << "Run failed, <2 days with detected infections\n\n";
+                        cerr << "Run failed at observation time = " << obs_time << ": <2 days with detected infections\n\n";
                         if (RETRY_SIMS) { i--; } // CAN RESULT IN AN INFINITE LOOP!!!
                     }
                     break;
