@@ -35,6 +35,7 @@ string tolower(const string input) {
 
 #define MAKE_ENUM(VAR) VAR,
 #define MAKE_STRINGS(VAR) #VAR,
+#define CERR_VAR(VAR) #VAR << " = " << VAR << ";"
 
 
 #define STATE_TYPE(VAR) \
@@ -105,6 +106,18 @@ class Parameters {
         totalPop = accumulate(village_pop.begin(), village_pop.end(), 0.0);
     }
 
+    void print_params() {
+        cerr << CERR_VAR(kappa) << ' ' << CERR_VAR(rho) << ' ' << CERR_VAR(numDaysToRecover) << ' ' << CERR_VAR(beta) << ' ' << CERR_VAR(deathRate) << ' '
+             << CERR_VAR(pir) << ' ' << CERR_VAR(AFP_det) << ' ' << CERR_VAR(reintroRate) << endl << ' ' << CERR_VAR(minBurnIn) << ' ' << CERR_VAR(obsPeriod) << ' '
+             << CERR_VAR(seasonalAmp) << ' ' << CERR_VAR(numSims) << ' ' << CERR_VAR(movModel) << ' ' << CERR_VAR(moveRate) << ' ' << CERR_VAR(ES_det) << ' '
+             << CERR_VAR(vacRate) << endl;
+        cerr << "village_pop =";
+        for (int vp : village_pop) {
+            cerr << ' ' << vp;
+        }
+        cerr << ";" << endl;
+    }
+
     double kappa, rho, pir, reintroRate, seasonalAmp, ES_det, vacRate, beta, deathRate, numDaysToRecover, AFP_det, minBurnIn, obsPeriod, moveRate;
     size_t numSims, movModel, numVillages;
     double totalPop;
@@ -153,6 +166,7 @@ Parameters* parse_params(string filename, size_t par_line) {
                      >> numSims >> movModel >> moveRate >> ES_det >> vacRate >> village_pop_str) {
                 vector<int> village_pop = vectorize_village_pop(village_pop_str);
                 par = new Parameters(kappa, rho, numDaysToRecover, beta, deathRate, pir, AFP_det, reintroRate, minBurnIn, obsPeriod, seasonalAmp, numSims, movModel, moveRate, ES_det, vacRate, village_pop);
+                par->print_params();
                 break;
             } else {
                 cerr << "ERROR: did not find valid parameter combination.  Found: " << buffer << endl;
