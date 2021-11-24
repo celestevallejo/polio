@@ -547,12 +547,12 @@ int main(int argc, char** argv) {
             // set initial values for each village using multinomial dist
             //initialValues[vil] = multinomial_Compartments(compartments[vil].size(),compartments[vil],vil,RNG());
             const double local_pop    = par->village_pop[vil];
-            state_data[S][vil]        = (int) (0.99*local_pop);         // naive susceptible (no previous contact w/virus, moves into I1)
-            state_data[I1][vil]       = local_pop - state_data[S][vil]; // first infected (only time paralytic case can occur, recovers into R)
-            state_data[R][vil]        = 0;                              // recovered (fully immune, wanes into P)
-            state_data[P][vil]        = 0;                              // partially susceptible (moves into IR)
-            state_data[IR][vil]       = 0;                              // reinfected (recovers into R)
-            state_data[V][vil]        = 0;                              // vaccinated compartment
+            state_data[I1][vil]       = (int) (0.01 * local_pop);                                 // first infected (only time paralytic case can occur, recovers into R)
+            state_data[V][vil]        = (int) (par->vacRate * local_pop);                         // vaccinated compartment
+            state_data[S][vil]        = local_pop - state_data[I1][vil] - state_data[V][vil];   // naive susceptible (no previous contact w/virus, moves into I1)
+            state_data[R][vil]        = 0;                                                      // recovered (fully immune, wanes into P)
+            state_data[P][vil]        = 0;                                                      // partially susceptible (moves into IR)
+            state_data[IR][vil]       = 0;                                                      // reinfected (recovers into R)
         }
 
         //long long int day_ct = -1;
