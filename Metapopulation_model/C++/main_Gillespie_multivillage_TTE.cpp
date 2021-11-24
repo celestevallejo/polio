@@ -475,38 +475,39 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
 
 
 void log_output(const Parameters* par, const vector<DailyDetectedEvents> &detected_event_ct_ts, const vector<vector<int>> &initial_states) {
-//serial par_combo replicate village_id village_size S I1 R P IR
+    stringstream serial;
+    serial << par->cksum << '-' << setw(5) << setfill('0') << par->rep;
 
-//serial par_combo replicate day_of_event event_type event_type_ct
-// reportable events include: population-wide extinction (I1 + IR -> 0 during observation period); S->I1 and P->IR
-// possibly will want patch ID as a output dimension
-
-//for (size_t state = 0; state < initial_states.size(); ++state) {
-//   for(size_t village = 0; village < initial_states[state].size(); ++village) {
-//   }
-//}
+    ofstream ofs;
+    string filename = par->cksum + "_init_states.out";
+    ofs.open(filename);
 
     // serial refers to checksum-replicate
     // output initial states
-    cerr << "serial village_id village_size S I1 R P IR V" << endl;
+    ofs << "serial village_id village_size S I1 R P IR V" << endl;
     for (size_t vil = 0; vil < par->numVillages; ++vil) {
-        cerr << par->cksum << '-' << setw(5) << setfill('0') << par->rep << ' ' << vil << ' ' << par->village_pop[vil];
+        ofs << serial.str() << ' ' << vil << ' ' << par->village_pop[vil];
         for (size_t state = 0; state < NUM_OF_STATE_TYPES; ++state) {
-            cerr << ' ' << initial_states[state][vil];
+            ofs << ' ' << initial_states[state][vil];
         }
-        cerr << endl;
+        ofs << endl;
     }
 
-cerr << endl;
+    ofs.close();
+    filename = par->cksum + "_event_cts.out";
+    ofs.open(filename);
+
     // output event counts for the obs period
-    cerr << "serial day_of_event afp_ct es_ct ext_ct" << endl;
+    ofs << "serial day_of_event afp_ct es_ct ext_ct" << endl;
     for (DailyDetectedEvents dde : detected_event_ct_ts) {
-        cerr << par->cksum << '-' << setw(5) << setfill('0') << par->rep << ' ' << dde.day;
+        ofs << serial.str() << ' ' << dde.day;
         for (size_t detectType = 0; detectType < NUM_OF_DETECTION_TYPES; ++detectType) {
-            cerr << ' ' << dde.detection_events[detectType];
+            ofs << ' ' << dde.detection_events[detectType];
         }
-        cerr << endl;
+        ofs << endl;
     }
+
+    ofs.close();
 
 }
 
