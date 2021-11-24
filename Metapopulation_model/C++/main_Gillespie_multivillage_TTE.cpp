@@ -44,6 +44,7 @@ string tolower(const string input) {
     VAR(R) \
     VAR(P) \
     VAR(IR) \
+    VAR(V) \
     VAR(NUM_OF_STATE_TYPES)
 enum StateType{ STATE_TYPE(MAKE_ENUM) };
 const char* const state_as_string[] = { STATE_TYPE(MAKE_STRINGS) };
@@ -282,7 +283,7 @@ vector<double> calculate_village_rates(const Parameters* par, const vector<vecto
     const int R_  = state_data[R][village];
     const int P_  = state_data[P][village];
     const int IR_ = state_data[IR][village];
-    double seasonalBeta = BETA*(1 + par->seasonalAmp*sin(time/(2*M_PI)));
+    double seasonalBeta = BETA*(1 + par->seasonalAmp*sin(time*2*M_PI)); // there was a bug here, resulting in a very long period (a factor of 4 PI^2 too long)
     double foi = seasonalBeta*(I1_ + KAPPA*IR_)/local_pop;
 
     vector<double> local_event_rates(NUM_OF_EVENT_TYPES, 0.0);
@@ -337,6 +338,13 @@ bool all_zeroes(const vector<int> &data) { return all_of(data.begin(), data.end(
 
 bool zero_infections(const vector<vector<int>> &state_data) { return all_zeroes(state_data[I1]) and all_zeroes(state_data[IR]); }
 
+int count_infections(const vector<vector<int>> &state_data) {
+    long int tally = 0;
+    for (auto val: state_data[I1]) { tally += val; }
+    for (auto val: state_data[IR]) { tally += val; }
+    return tally;
+}
+
 void move_from_A_to_B (vector<vector<int>> &state_data, const vector<size_t> &vil_pair, StateType state) {
     const size_t vil_A = vil_pair[0];
     const size_t vil_B = vil_pair[1];
@@ -372,10 +380,12 @@ void process_movement_event(const Parameters* par, vector<vector<int>> &state_da
 }
 
 
-void process_reintroduction_event(vector<vector<int>> &state_data, const size_t village, mt19937 &RNG) {
+void process_reintroduction_event(const Parameters* par, vector<vector<int>> &state_data, const size_t village, mt19937 &RNG) {
     // treat reintroduction as exposure event that is density dependent
     // Sample state of person to whom exposure event will occur
     StateType state = choose_villager(state_data, village, RNG);
+
+    if (state == P and runif(RNG) > par->kappa) { return; } // partially immune person resisted exposure
 
     // exposure events only change state of S and P compartments
     EventType event = state == S ? FIRST_INFECTION_EVENT :
@@ -413,11 +423,10 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
     }
 
     switch(ve.event_type) {
-        case FIRST_INFECTION_EVENT:{
+        case FIRST_INFECTION_EVENT:
             if (obs_time > 0) {
                 reportable_event_ct[FIRST_INFECTION]++;
             }
-        }
             break;
         case RECOVERY_FROM_FIRST_INFECTION_EVENT:   //[[fallthrough]]
         case RECOVERY_FROM_REINFECTION_EVENT:
@@ -428,8 +437,10 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
         case DEATH_EVENT:
             {
                 StateType deceased = choose_villager(state_data, village, RNG);
+                StateType birthState = NUM_OF_STATE_TYPES;
+                birthState = runif(RNG) < par->vacRate ? V : S; // state of the person who replaced the deceased, either S or V
                 --state_data[deceased][village];
-                ++state_data[S][village];
+                ++state_data[birthState][village];
                 if (is_infected_state(deceased) and obs_time > 0 and zero_infections(state_data)) {
                     reportable_event_ct[EXTINCTION]++;
                 }
@@ -440,7 +451,7 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
             break;
         case REINTRODUCTION_EVENT:
             if (obs_time < 0) {                     // reintroductions only happen during the burn-in
-                process_reintroduction_event(state_data, village, RNG);
+                process_reintroduction_event(par, state_data, village, RNG);
             }
             break;
         case REINFECTION_EVENT:
@@ -485,9 +496,6 @@ int main(int argc, char** argv) {
 //cerr << endl;
 //exit(-565);
 
-    // TODO -- review what data is being used and for what.  we may not need everything we're outputting
-    // vectors for holding information to be output
-
     //random_device rd;                                   // generates a random real number for the seed
     // unsigned long int seed = rd();
     const size_t initial_seed = 8675309;
@@ -495,10 +503,11 @@ int main(int argc, char** argv) {
 
     // The Simulation
     //for (size_t i = 0; i < par->numSims; ++i) {
-    for (size_t i = 0; i < 1; ++i) {
+    for (size_t i = 0; i < 1; ++i) { // main replicate loop
         // initialize size of vectors for individual compartments
         vector<vector<int>> state_data(NUM_OF_STATE_TYPES, vector<int>(par->numVillages, 0.0));
 
+        // TODO -- output seed
         mt19937 RNG(initial_seed + i);                  // random number generator
         double time         = 0.0;                      // "absolute" time, relative to start of simulation
         double burn_in      = -DBL_MAX;                 // don't know yet exactly how long burn-in will be.  burn_in ends with first event after MIN_BURN_IN
@@ -513,6 +522,7 @@ int main(int argc, char** argv) {
             state_data[R][vil]        = 0;                              // recovered (fully immune, wanes into P)
             state_data[P][vil]        = 0;                              // partially susceptible (moves into IR)
             state_data[IR][vil]       = 0;                              // reinfected (recovers into R)
+            state_data[V][vil]        = 0;                              // vaccinated compartment
         }
 
         //long long int day_ct = -1;
@@ -558,7 +568,7 @@ int main(int argc, char** argv) {
                 // TODO -- if after burn-in and isNewDay, report extinctions and *detected* infections as appropriate, then clear counts
                 if (day_ct % 10 == 0) {
                     cerr << "time, day: " << right << setw(9) << setprecision(3) << time << ", " << setw(6) << day_ct << " | ";
-                    cerr_state(state_data, 0);
+                    cerr_state(state_data, 0); // only outputting the first village
                 }
                 ++day_ct;
             }
@@ -567,14 +577,19 @@ int main(int argc, char** argv) {
                 if (burn_in < 0) { // this is the first event after the burn-in has been completed
                     burn_in = time;
                     initial_states = state_data; // capture state of system at end of burn-in
+                    // possible TODO -- if no infections at this point, force one somewhere?
                 }
                 obs_time = time - burn_in; // here obs_time will always be >= 0.0
 
                 // stopping condition
                 if (zero_infections(state_data) or (obs_time >= par->obsPeriod)) {
-                    if (num_days_with_detections < 2) { // no intercase intervals to report
+                    if (num_days_with_detections < 1) { // no detections occurred, so this replicate isn't useful
                         cerr << "Run failed at observation time = " << obs_time << ": <2 days with detected infections\n\n";
-                        if (RETRY_SIMS) { i--; } // CAN RESULT IN AN INFINITE LOOP!!!
+                        if (RETRY_SIMS) {
+                            i--;
+                        } // CAN RESULT IN AN INFINITE LOOP!!!
+                    } else {
+                        log_output(detected_event_ct_ts, initial_states);
                     }
                     break;
                 }
@@ -584,8 +599,6 @@ int main(int argc, char** argv) {
             event_handler(par, ve, state_data, obs_time, reportable_event_ct, RNG);
             time = ve.time;
         }
-        log_output(detected_event_ct_ts, initial_states);
     }
-//    output_results();
     return 0;
 }
