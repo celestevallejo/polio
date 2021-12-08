@@ -431,13 +431,13 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
 
     switch(ve.event_type) {
         case FIRST_INFECTION_EVENT:
-            if (obs_time >= 0) {
+            if (obs_time >= 0 and par->village_pop[village] < 1e6) {
                 reportable_event_ct[FIRST_INFECTION]++;
             }
             break;
         case RECOVERY_FROM_FIRST_INFECTION_EVENT:   //[[fallthrough]]
         case RECOVERY_FROM_REINFECTION_EVENT:
-            if (obs_time >= 0 and zero_infections(state_data)) {
+            if (obs_time >= 0 and zero_infections(state_data) and par->village_pop[village] < 1e6) {
                 reportable_event_ct[EXTINCTION]++;
             }
             break;
@@ -448,7 +448,7 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
                 birthState = runif(RNG) < par->vacRate ? V : S; // state of the person who replaced the deceased, either S or V
                 --state_data[deceased][village];
                 ++state_data[birthState][village];
-                if (is_infected_state(deceased) and obs_time >= 0 and zero_infections(state_data)) {
+                if (is_infected_state(deceased) and obs_time >= 0 and zero_infections(state_data) and par->village_pop[village] < 1e6) {
                     reportable_event_ct[EXTINCTION]++;
                 }
             }
@@ -462,7 +462,7 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
             }
             break;
         case REINFECTION_EVENT:
-            if (obs_time >= 0)  {
+            if (obs_time >= 0 and par->village_pop[village] < 1e6)  {
                 reportable_event_ct[REINFECTION]++; // will be determined later whether environmental surveillance occurred
             }
             break;
