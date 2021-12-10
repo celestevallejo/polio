@@ -116,6 +116,8 @@ class Parameters {
         village_pop = _village_pop;
         numVillages = village_pop.size();
         totalPop = accumulate(village_pop.begin(), village_pop.end(), 0.0);
+
+        output_event_counts = true;
     }
 
     void print_params() {
@@ -135,6 +137,8 @@ class Parameters {
     size_t numSims, movModel, numVillages, rep;
     double totalPop;
     vector<int> village_pop;
+
+    bool output_event_counts;
 };
 
 class DailyDetectedEvents {
@@ -431,13 +435,15 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
 
     switch(ve.event_type) {
         case FIRST_INFECTION_EVENT:
-            if (obs_time >= 0 and par->village_pop[village] < 1e6) {
+            if (obs_time >= 0) {
+            //if (obs_time >= 0 and par->village_pop[village] < 1e6) {
                 reportable_event_ct[FIRST_INFECTION]++;
             }
             break;
         case RECOVERY_FROM_FIRST_INFECTION_EVENT:   //[[fallthrough]]
         case RECOVERY_FROM_REINFECTION_EVENT:
-            if (obs_time >= 0 and zero_infections(state_data) and par->village_pop[village] < 1e6) {
+            if (obs_time >= 0 and zero_infections(state_data)) {
+            //if (obs_time >= 0 and zero_infections(state_data) and par->village_pop[village] < 1e6) {
                 reportable_event_ct[EXTINCTION]++;
             }
             break;
@@ -448,7 +454,8 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
                 birthState = runif(RNG) < par->vacRate ? V : S; // state of the person who replaced the deceased, either S or V
                 --state_data[deceased][village];
                 ++state_data[birthState][village];
-                if (is_infected_state(deceased) and obs_time >= 0 and zero_infections(state_data) and par->village_pop[village] < 1e6) {
+                if (is_infected_state(deceased) and obs_time >= 0 and zero_infections(state_data)) {
+                //if (is_infected_state(deceased) and obs_time >= 0 and zero_infections(state_data) and par->village_pop[village] < 1e6) {
                     reportable_event_ct[EXTINCTION]++;
                 }
             }
@@ -462,7 +469,8 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
             }
             break;
         case REINFECTION_EVENT:
-            if (obs_time >= 0 and par->village_pop[village] < 1e6)  {
+            if (obs_time >= 0)  {
+            //if (obs_time >= 0 and par->village_pop[village] < 1e6)  {
                 reportable_event_ct[REINFECTION]++; // will be determined later whether environmental surveillance occurred
             }
             break;
@@ -476,7 +484,8 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
 
 void log_output(const Parameters* par, const vector<DailyDetectedEvents> &detected_event_ct_ts, const vector<vector<int>> &initial_states) {
     stringstream serial;
-    serial << par->cksum << '-' << setw(5) << setfill('0') << par->rep;
+    //serial << par->cksum << '-' << setw(5) << setfill('0') << par->rep;
+    serial << hex << par->rep;
 
     ofstream ofs;
     string filename = par->cksum + "_init_states.out";
@@ -498,12 +507,21 @@ void log_output(const Parameters* par, const vector<DailyDetectedEvents> &detect
     ofs.open(filename);
 
     // output event counts for the obs period
-    ofs << "serial day_of_event afp_ct es_ct ext_ct" << endl;
+    if (par->output_event_counts) { ofs << "serial day_of_event afp_ct es_ct ext_ct" << endl; }
+    else { ofs << "serial day_of_event what_events_occurred" << endl; }
+
     for (DailyDetectedEvents dde : detected_event_ct_ts) {
         ofs << serial.str() << ' ' << dde.day;
+        string bin_events_occurred;
         for (size_t detectType = 0; detectType < NUM_OF_DETECTION_TYPES; ++detectType) {
-            ofs << ' ' << dde.detection_events[detectType];
+            if (par->output_event_counts) {
+                ofs << ' ' << dde.detection_events[detectType];
+            } else {
+                bin_events_occurred += (dde.detection_events[detectType] > 0) ? "1" : "0";
+            }
         }
+
+        if (not par->output_event_counts) { ofs << ' ' << stoi(bin_events_occurred, 0, 2); }
         ofs << endl;
     }
 
@@ -517,6 +535,7 @@ int main(int argc, char** argv) {
     string par_file = argv[1];
     size_t par_idx  = atoi(argv[2]); // which line in the par file to use
     Parameters* par = parse_params(par_file, par_idx);
+    par->output_event_counts = false;
 
 //cerr << par->kappa << ' ' << par->rho << ' ' << par->numDaysToRecover << ' ' << par->beta << ' ' << par->PIR << ' ' << par->AFP_det << ' ' << par->reintroRate << ' ' << par->minBurnIn << ' ' << par->obsPeriod
 //     << ' ' << par->seasonalAmp << ' ' << par->numSims << ' ' << par->movModel << ' ' << par->moveRate << ' ' << par->ES_det << ' ' << par->vacRate << ' ';
