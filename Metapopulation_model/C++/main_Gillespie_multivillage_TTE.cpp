@@ -25,7 +25,7 @@
 
 using namespace std;
 
-const bool RETRY_SIMS              = false;
+const bool RETRY_SIMS              = true;
 
 string tolower(const string input) {
     string output(input);
@@ -415,7 +415,7 @@ void append_output(const Parameters* par, vector<vector<vector<int>>> &output, c
 }
 
 
-void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<int>> &state_data, const double obs_time, vector<int> &reportable_event_ct, mt19937& RNG) {
+void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<int>> &state_data, const double obs_time, vector<int> &reportable_event_ct, /*map<StateType, size_t> &infection_ct,*/ mt19937& RNG) {
     const size_t village  = ve.village;
     const EventType event = ve.event_type;
     StateType prev_state  = NUM_OF_STATE_TYPES;
@@ -431,13 +431,14 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
 
     switch(ve.event_type) {
         case FIRST_INFECTION_EVENT:
-            if (obs_time >= 0 and par->village_pop[village] < 1e6) {
+            if (obs_time >= 0) {
+//                infection_ct[I1]++;
                 reportable_event_ct[FIRST_INFECTION]++;
             }
             break;
         case RECOVERY_FROM_FIRST_INFECTION_EVENT:   //[[fallthrough]]
         case RECOVERY_FROM_REINFECTION_EVENT:
-            if (obs_time >= 0 and zero_infections(state_data) and par->village_pop[village] < 1e6) {
+            if (obs_time >= 0 and zero_infections(state_data)) {
                 reportable_event_ct[EXTINCTION]++;
             }
             break;
@@ -448,7 +449,7 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
                 birthState = runif(RNG) < par->vacRate ? V : S; // state of the person who replaced the deceased, either S or V
                 --state_data[deceased][village];
                 ++state_data[birthState][village];
-                if (is_infected_state(deceased) and obs_time >= 0 and zero_infections(state_data) and par->village_pop[village] < 1e6) {
+                if (is_infected_state(deceased) and obs_time >= 0 and zero_infections(state_data)) {
                     reportable_event_ct[EXTINCTION]++;
                 }
             }
@@ -462,7 +463,8 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
             }
             break;
         case REINFECTION_EVENT:
-            if (obs_time >= 0 and par->village_pop[village] < 1e6)  {
+            if (obs_time >= 0)  {
+//                infection_ct[IR]++;
                 reportable_event_ct[REINFECTION]++; // will be determined later whether environmental surveillance occurred
             }
             break;
@@ -474,17 +476,16 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
 }
 
 
-void log_output(const Parameters* par, const vector<DailyDetectedEvents> &detected_event_ct_ts, const vector<vector<int>> &initial_states) {
+void log_output_alt(const Parameters* par, const vector<DailyDetectedEvents> &detected_event_ct_ts, const vector<vector<int>> &initial_states) {
     stringstream serial;
     serial << par->cksum << '-' << setw(5) << setfill('0') << par->rep;
 
     ofstream ofs;
-    string filename = par->cksum + "_init_states.out";
-    ofs.open(filename);
+    string filename = "./output/" + par->cksum + "_init_states.out";
+    ofs.open(filename, ios_base::app);
 
     // serial refers to checksum-replicate
     // output initial states
-    ofs << "serial village_id village_size S I1 R P IR V" << endl;
     for (size_t vil = 0; vil < par->numVillages; ++vil) {
         ofs << serial.str() << ' ' << vil << ' ' << par->village_pop[vil];
         for (size_t state = 0; state < NUM_OF_STATE_TYPES; ++state) {
@@ -494,11 +495,83 @@ void log_output(const Parameters* par, const vector<DailyDetectedEvents> &detect
     }
 
     ofs.close();
-    filename = par->cksum + "_event_cts.out";
+    filename = "./output/" + par->cksum + "_interval_cts.out";
+    ofs.open(filename, ios_base::app);
+
+    // output event counts for the obs period
+    double prev_case = -1;
+    //double intercase_ivl  = 0;
+    double extinction_ivl = -1;
+    map<double, size_t> intercase_ivls;
+    for (DailyDetectedEvents dde : detected_event_ct_ts) {
+        bool hasCase = dde.detection_events[AFP_DETECTION] > 0 or dde.detection_events[ES_DETECTION] > 0;
+        if (prev_case < 0) { // first iteration
+            assert(hasCase);
+            prev_case = dde.day;
+            continue;
+        }
+
+        if (hasCase) {
+            intercase_ivls[dde.day - prev_case]++;
+            prev_case = dde.day;
+        }
+
+        if (dde.detection_events[EXTINCTION_DETECTION]) {
+            extinction_ivl = dde.day - prev_case;
+        }
+    }
+
+    for (auto const& [duration, count]: intercase_ivls) {
+        ofs << serial.str() << " ic " << duration << ' ' << count << endl;
+    }
+
+    ofs << serial.str() << " ex " << extinction_ivl << " 1" << endl;
+
+    ofs.close();
+}
+
+
+void write_headers(const Parameters* par){
+    stringstream serial;
+    serial << par->cksum << '-' << setw(5) << setfill('0') << par->rep;
+
+    ofstream ofs;
+
+    string filename = "./output/" + par->cksum + "_interval_cts.out";
+    ofs.open(filename);
+    ofs << "serial village_id village_size S I1 R P IR V" << endl;
+    ofs.close();
+
+    filename = "./output/" + par->cksum + "_event_cts.out";
+    ofs.open(filename);
+    ofs << "serial day_of_event afp_ct es_ct ext_ct" << endl;
+    ofs.close();
+}
+
+
+/* void log_output(const Parameters* par, const vector<DailyDetectedEvents> &detected_event_ct_ts, const vector<vector<int>> &initial_states) {
+    stringstream serial;
+    serial << par->cksum << '-' << setw(5) << setfill('0') << par->rep;
+
+    ofstream ofs;
+    string filename = "./output/" + par->cksum + "_init_states.out";
+    ofs.open(filename);
+
+    // serial refers to checksum-replicate
+    // output initial states
+    for (size_t vil = 0; vil < par->numVillages; ++vil) {
+        ofs << serial.str() << ' ' << vil << ' ' << par->village_pop[vil];
+        for (size_t state = 0; state < NUM_OF_STATE_TYPES; ++state) {
+            ofs << ' ' << initial_states[state][vil];
+        }
+        ofs << endl;
+    }
+
+    ofs.close();
+    filename = "./output/" + par->cksum + "_event_cts.out";
     ofs.open(filename);
 
     // output event counts for the obs period
-    ofs << "serial day_of_event afp_ct es_ct ext_ct" << endl;
     for (DailyDetectedEvents dde : detected_event_ct_ts) {
         ofs << serial.str() << ' ' << dde.day;
         for (size_t detectType = 0; detectType < NUM_OF_DETECTION_TYPES; ++detectType) {
@@ -509,7 +582,7 @@ void log_output(const Parameters* par, const vector<DailyDetectedEvents> &detect
 
     ofs.close();
 
-}
+}*/
 
 
 int main(int argc, char** argv) {
@@ -530,16 +603,18 @@ int main(int argc, char** argv) {
     // unsigned long int seed = rd();
     const size_t initial_seed = 8675309;
     //cerr << "seed: " << seed << endl;
+    write_headers(par);
+    size_t seed_increment = 0;
 
     // The Simulation
     //for (size_t i = 0; i < par->numSims; ++i) {
-    for (size_t i = 0; i < 1; ++i) { // main replicate loop
+    for (size_t i = 0; i < 100; ++i) { // main replicate loop
         // initialize size of vectors for individual compartments
         vector<vector<int>> state_data(NUM_OF_STATE_TYPES, vector<int>(par->numVillages, 0.0));
 
         // TODO -- output seed
-        par->rep = i;                                    // use i to track replicate?
-        mt19937 RNG(initial_seed + i);                  // random number generator
+        par->rep = i;                                   // use i to track replicate?
+        mt19937 RNG(initial_seed + seed_increment++);   // random number generator
         double time         = 0.0;                      // "absolute" time, relative to start of simulation
         double burn_in      = -DBL_MAX;                 // don't know yet exactly how long burn-in will be.  burn_in ends with first event after MIN_BURN_IN
         double obs_time     = -DBL_MAX;                 // time measured since burn-in
@@ -564,11 +639,12 @@ int main(int argc, char** argv) {
         // event data:              serial par_combo replicate day_of_event event_type event_type_ct
         vector<vector<int>> initial_states;                                                 // for each state, number of people in that state for each village
         vector<int> reportable_event_ct         = vector<int>(NUM_OF_REPORTABLE_EVENTS, 0); // things that *might* be detected
+//        map<StateType, size_t> infection_ct;
         vector<DailyDetectedEvents> detected_event_ct_ts;                                   // time series of things that *were* detected
 
         int prev_day                            = 0;
         int num_days_with_detections            = 0;
-        int day_ct                              = 0; // for logging data every day
+//        int day_ct                              = 0; // for logging data every day
 
         while (true) {
             VillageEvent ve = sample_event(par, state_data, time, RNG); // This is where 'time' gets updated
@@ -586,8 +662,8 @@ int main(int argc, char** argv) {
 
             }
 
-            // have we completed the previous day?
-            if ((int) day > prev_day) {
+            // have we completed the previous day (or alternatively, is this the last iteration)?
+            if ((int) day > prev_day or reportable_event_ct[EXTINCTION] > 0) {
                 // for each new day, check if we are in the obs period
                 // if so, log previous day's events
                 if (obs_time >= 0) { // 'tis a new day!  tally what happened yesterday
@@ -611,30 +687,36 @@ int main(int argc, char** argv) {
                 prev_day = day;
             }
 
-            while (day > day_ct) { // increment day counter as needed
-                if (day_ct % 100 == 0) {
-                    string obs_str = obs_time >= 0 ? to_string(obs_time) : "-1";
-                    cerr << fixed << "time, day, obs: " << right << setw(10) << setprecision(3) << time << ", " << setw(10) << (int) day << "," << setw(10) << obs_str << " | ";
-                    cerr_state(state_data);
-                }
-                ++day_ct;
-            }
+//            while (day > day_ct) { // increment day counter as needed
+//                if (day_ct % 100 == 0) {
+//                    string obs_str = obs_time >= 0 ? to_string(obs_time) : "-1";
+//                    cerr << fixed << "time, day, obs: " << right << setw(10) << setprecision(3) << time << ", " << setw(10) << (int) day << "," << setw(10) << obs_str << " | ";
+//                    cerr_state(state_data);
+//                }
+//                ++day_ct;
+//            }
 
             // check for stopping conditions BEFORE handling newly sampled event
             if (obs_time >= 0 and (zero_infections(state_data) or (obs_time >= par->obsPeriod))) {
+                if (zero_infections(state_data)) {
+                    cerr << "no infections left\n";
+                } else if (obs_time >= par->obsPeriod) {
+                    cerr << "exceeded the observation period\n";
+                }
+                cerr << "Stopping time: " << day << endl;
                 if (num_days_with_detections < 1) { // no detections occurred, so this replicate isn't useful
                     cerr << "Run failed at observation time = " << obs_time << ": <2 days with detected infections\n\n";
                     if (RETRY_SIMS) {
                         i--;
                     } // CAN RESULT IN AN INFINITE LOOP!!!
                 } else {
-                    log_output(par, detected_event_ct_ts, initial_states);
+                    log_output_alt(par, detected_event_ct_ts, initial_states);
                 }
                 break;
             }
 
             // handle the newly sampled event after knowing we can continue simulating
-            event_handler(par, ve, state_data, obs_time, reportable_event_ct, RNG);
+            event_handler(par, ve, state_data, obs_time, reportable_event_ct, /*infection_ct,*/ RNG);
         }
     }
     return 0;
