@@ -116,6 +116,8 @@ class Parameters {
         village_pop = _village_pop;
         numVillages = village_pop.size();
         totalPop = accumulate(village_pop.begin(), village_pop.end(), 0.0);
+
+        output_event_counts = true;
     }
 
     void print_params() {
@@ -135,6 +137,8 @@ class Parameters {
     size_t numSims, movModel, numVillages, rep;
     double totalPop;
     vector<int> village_pop;
+
+    bool output_event_counts;
 };
 
 class DailyDetectedEvents {
@@ -478,7 +482,8 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
 
 void log_output_alt(const Parameters* par, const vector<DailyDetectedEvents> &detected_event_ct_ts, const vector<vector<int>> &initial_states) {
     stringstream serial;
-    serial << par->cksum << '-' << setw(5) << setfill('0') << par->rep;
+    //serial << par->cksum << '-' << setw(5) << setfill('0') << par->rep;
+    serial << hex << par->rep;
 
     ofstream ofs;
     string filename = "./output/" + par->cksum + "_init_states.out";
@@ -500,7 +505,6 @@ void log_output_alt(const Parameters* par, const vector<DailyDetectedEvents> &de
 
     // output event counts for the obs period
     double prev_case = -1;
-    //double intercase_ivl  = 0;
     double extinction_ivl = -1;
     map<double, size_t> intercase_ivls;
     for (DailyDetectedEvents dde : detected_event_ct_ts) {
@@ -537,14 +541,14 @@ void write_headers(const Parameters* par){
 
     ofstream ofs;
 
-    string filename = "./output/" + par->cksum + "_interval_cts.out";
+    string filename = "./output/" + par->cksum + "_init_states.out";
     ofs.open(filename);
     ofs << "serial village_id village_size S I1 R P IR V" << endl;
     ofs.close();
 
-    filename = "./output/" + par->cksum + "_event_cts.out";
+    filename = "./output/" + par->cksum + "_interval_cts.out";
     ofs.open(filename);
-    ofs << "serial day_of_event afp_ct es_ct ext_ct" << endl;
+    ofs << "serial type len ct" << endl;
     ofs.close();
 }
 
@@ -572,11 +576,21 @@ void write_headers(const Parameters* par){
     ofs.open(filename);
 
     // output event counts for the obs period
+    if (par->output_event_counts) { ofs << "serial day_of_event afp_ct es_ct ext_ct" << endl; }
+    else { ofs << "serial day_of_event what_events_occurred" << endl; }
+
     for (DailyDetectedEvents dde : detected_event_ct_ts) {
         ofs << serial.str() << ' ' << dde.day;
+        string bin_events_occurred;
         for (size_t detectType = 0; detectType < NUM_OF_DETECTION_TYPES; ++detectType) {
-            ofs << ' ' << dde.detection_events[detectType];
+            if (par->output_event_counts) {
+                ofs << ' ' << dde.detection_events[detectType];
+            } else {
+                bin_events_occurred += (dde.detection_events[detectType] > 0) ? "1" : "0";
+            }
         }
+
+        if (not par->output_event_counts) { ofs << ' ' << stoi(bin_events_occurred, 0, 2); }
         ofs << endl;
     }
 
@@ -590,6 +604,7 @@ int main(int argc, char** argv) {
     string par_file = argv[1];
     size_t par_idx  = atoi(argv[2]); // which line in the par file to use
     Parameters* par = parse_params(par_file, par_idx);
+    par->output_event_counts = false;
 
 //cerr << par->kappa << ' ' << par->rho << ' ' << par->numDaysToRecover << ' ' << par->beta << ' ' << par->PIR << ' ' << par->AFP_det << ' ' << par->reintroRate << ' ' << par->minBurnIn << ' ' << par->obsPeriod
 //     << ' ' << par->seasonalAmp << ' ' << par->numSims << ' ' << par->movModel << ' ' << par->moveRate << ' ' << par->ES_det << ' ' << par->vacRate << ' ';
@@ -607,8 +622,7 @@ int main(int argc, char** argv) {
     size_t seed_increment = 0;
 
     // The Simulation
-    //for (size_t i = 0; i < par->numSims; ++i) {
-    for (size_t i = 0; i < 100; ++i) { // main replicate loop
+    for (size_t i = 0; i < par->numSims; ++i) {
         // initialize size of vectors for individual compartments
         vector<vector<int>> state_data(NUM_OF_STATE_TYPES, vector<int>(par->numVillages, 0.0));
 
