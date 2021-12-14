@@ -7,11 +7,13 @@ SQLDIR = $(ABCDIR)/sqdb
 ABC_LIB = -L$(ABCDIR) -labc -ljsoncpp -lsqdb $(ABCDIR)/sqlite3.o
 GSL_LIB = -lm -L$(GSL_PATH)/lib/ -lgsl -lgslcblas -lpthread -ldl
 
-INCLUDE = -I$(ABCDIR) -I$(GSL_PATH)/include/
-#default: current_version 
+INCLUDE = -I$(ABCDIR) -I$(GSL_PATH)/include/ 
 
-current_version: main_EventDrivenIBM.cpp EventDriven_Sim_Teunis_waning.hpp EventDriven_parameters.hpp | $(output_dir)/polio_data
-	g++ $(FLAGS) main_EventDrivenIBM.cpp -o polio
+polio_ed: EventDriven/IBM/main_EventDrivenIBM.cpp EventDriven/IBM/EventDriven_Sim.hpp EventDriven/IBM/EventDriven_parameters.hpp | $(output_dir)/polio_data
+	g++ $(FLAGS) EventDriven/IBM/main_EventDrivenIBM.cpp -o polio_ed
+
+polio_abc: EventDriven_parameters.hpp EventDriven_Sim.hpp main_EventDrivenIBM_abcsmc.cpp
+	g++ $(FLAGS) $(INCLUDE) -I$(SQLDIR) main_EventDrivenIBM_abcsmc.cpp -o polio_abc $(ABC_LIB) $(GSL_LIB)
 
 debug: main_Gillespie.cpp
 	g++ $(FLAGS) main_Gillespie.cpp -o debug
@@ -30,6 +32,16 @@ pde_abc: libabc PDE_Simulator_abc.cpp
 
 libabc:
 	$(MAKE) -C $(ABCDIR) -f Makefile
+
+polio_boxcar: Boxcar_Model/Polio_boxcar_simulator.cpp Boxcar_Model/Polio_boxcar_model_extended_waning.h Boxcar_Model/DIFFEQ_SIM.h Boxcar_Model/Polio_boxcar_parameters.h
+	g++ $(FLAGS) $(INCLUDE) Boxcar_Model/Polio_boxcar_simulator.cpp -o polio_boxcar $(GSL_LIB)
+
+polio_boxcar_cel: Boxcar_Model/Polio_boxcar_simulator.cpp Boxcar_Model/Polio_boxcar_model_extended_waning.h Boxcar_Model/DIFFEQ_SIM.h Boxcar_Model/Polio_boxcar_parameters.h Boxcar_Model/adjustable_boxcar_model.h
+	g++ $(FLAGS) Boxcar_Model/Polio_boxcar_simulator.cpp -o polio_boxcar_cel -lgsl
+
+boxcar_abc: libabc Boxcar_Model/Polio_boxcar_simulator.cpp
+	g++ $(FLAGS) $(INCLUDE) -I$(SQLDIR) Boxcar_Model/Polio_boxcar_simulator.cpp -o boxcar_abc $(ABC_LIB) $(GSL_LIB)
+
 
 $(output_dir)/polio_data:
 	mkdir $@
