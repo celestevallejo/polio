@@ -80,7 +80,8 @@ vector<double> simulator(vector<double> args, const unsigned long int rng_seed, 
         }
         else{
             pathogen = 0;
-            antibody = y1*pow((1+(r-1)*pow(y1,r-1)*nu*(t-t1)),-(1/(r-1)));
+            antibody = y1*pow(1+(r-1)*pow(y1,r-1)*nu*(t-t1),-(1/(r-1)));
+//            cerr << "ab, j, part: " << antibody << ", " << j << ", " << (r-1)*pow(y1,r-1)*nu*(t-t1) << endl;
         }
 
         if(j<=t1/dt){//integrals of these quantities only defined up until recovery time
@@ -107,7 +108,6 @@ vector<double> simulator(vector<double> args, const unsigned long int rng_seed, 
 //vectors for between-host solution
     cerr << "sT: " << simulationTimeSteps << "\n";
     vector<double> S(simulationTimeSteps,0.0);
-    cerr << "b\n";
     S[0] = 1000;
     //myfile2<<S[0]<<" , ";
     vector<vector<double> > I1(2,vector<double>(recoveryTimeSteps,0.0));
@@ -147,7 +147,9 @@ vector<double> simulator(vector<double> args, const unsigned long int rng_seed, 
         for(unsigned int j = 0; j< waningTimeSteps; j++){
             Rpop +=   R[0][j];
         }
-        double totalPop = S[k-1] + I1pop + Rpop + Irpop;
+        const double totalPop = S[k-1] + I1pop + Rpop + Irpop;
+        //cerr << "timeStep, S[k-1], I1pop, Rpop, Irpop: " << k << ", " << S[k-1] << ", " << I1pop << ", " << Rpop << ", " << Irpop << endl;
+        //if (not totalPop>0) { return {0.0}; } // there are no people left; endemic disease equilibrium is 0
         assert(totalPop>0);
         double intSum = 0;
         double intSum1 = 0;
@@ -155,6 +157,7 @@ vector<double> simulator(vector<double> args, const unsigned long int rng_seed, 
             //linearize to get 0 index
             intSum  += dt * (beta1[j] * I1[0][j] + beta2[j] * Ir[0][j]);
             intSum1 += dt * (gamma1[j] * I1[0][j] + gamma2[j] * Ir[0][j]);
+            //cerr << "j, intSum1: " << j << ", " << intSum1 << endl;
         }
         S[k] = (S[k-1] + dt*delta*totalPop)/(1+dt*intSum*(1.0/totalPop)+dt*delta);
         //myfile2<<S[k]<<" , ";
@@ -164,6 +167,7 @@ vector<double> simulator(vector<double> args, const unsigned long int rng_seed, 
                 R[1][j] = intSum1;//boundary condition
             } else {
                 R[1][j] = R[0][j-1]/(1 + dt*((rho[j]/totalPop)*intSum+delta));
+//                cerr << "R[1][j], dt, rho[j], totalPop, inSum, delta, k, j: " << R[1][j] << ", " << dt << ", " << rho[j] << ", " << totalPop << ", " << intSum << ", " << delta << ", " << k << ", " << j << endl;
             }
             //myfile3<<R[1][j]<<" , ";
             intSum2+= dt*rho[j]*R[1][j];
@@ -217,7 +221,7 @@ vector<double> simulator(vector<double> args, const unsigned long int rng_seed, 
                     }
                     --offset;
                 }
-            }
+           }
             if (obs_max.second - obs_min.second < epsilon) {
                 // woohoo!
                 symptomaticIncidence.resize(k+1);
