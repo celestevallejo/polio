@@ -216,10 +216,8 @@ struct VillageEvent{
     double time;
 };
 
-//string output_dir = "/home/tjhladish/work/polio-small-pop/output/";
-//string output_dir ="/Users/Celeste/Desktop/multipatch_model/sim_results/";
-//string output_dir ="/Users/Celeste/Desktop/polio-small-pop/polio-small-pop/new_data_after_review/";
-string output_dir ="./";
+string output_dir = "/blue/longini/tjhladish/tmp/";
+//string output_dir ="./";
 string ext = "_test.csv";
 const string SEP = ",";
 
@@ -276,14 +274,14 @@ vector<double> calculate_village_rates(const Parameters* par, const vector<vecto
 
 //        vacRate = _vacRate; // TODO -- implement this
 
-    const double KAPPA                 = par->kappa;            //0.4179;                // waning depth parameter
-    const double RHO                   = par->rho;              //0.2;                   // waning speed parameter
+    const double KAPPA                 = par->kappa;                               //0.4179;                // waning depth parameter
+    const double RHO                   = par->rho;                                 //0.2;                   // waning speed parameter
     const double local_pop             = par->village_pop[village];
-    const double RECOVERY              = 365.0/par->numDaysToRecover;// recovery rate (/year)
-    const double BETA                  = par->beta;             //135.0;                   // contact rate (individuals/year)
-    const double DEATH                 = par->deathRate;        //1.0/lifespan;          // death rate (per year)
-    const double MOVE_RATE             = par->moveRate;         //expectedTimeUntilMove > 0 ? 1/expectedTimeUntilMove : 0;
-    const double REINTRODUCTION_RATE   = par->reintroRate;      //1.0/10.0;              // was 0
+    const double RECOVERY              = 365.0/par->numDaysToRecover;              // recovery rate (/year)
+    const double BETA                  = par->beta;                                //135.0;                   // contact rate (individuals/year)
+    const double DEATH                 = par->deathRate;                           //1.0/lifespan;          // death rate (per year)
+    const double MOVE_RATE             = par->numVillages > 1 ? par->moveRate : 0; //expectedTimeUntilMove > 0 ? 1/expectedTimeUntilMove : 0;
+    const double REINTRODUCTION_RATE   = par->reintroRate;                         //1.0/10.0;              // was 0
 //    const double VAC_RATE              = par->vacRate;
 //    const double VAC_FRAC              = 0.20;                  // percentage of population vaccinated at birth
     const bool STRICT_TRAVEL           = (bool) par->movModel;  //true;                  // true: movement means moving to another patch; false: movement (implicitly) can mean moving within a patch
@@ -383,7 +381,6 @@ void process_movement_event(const Parameters* par, vector<vector<int>> &state_da
     // Sample states of people to move from A to B and vice versa
     const StateType state_A = choose_villager(state_data, vil_A, RNG);
     const StateType state_B = choose_villager(state_data, vil_B, RNG);
-
     if (state_A != state_B) {
         move_from_A_to_B(state_data, {vil_A, vil_B}, state_A);
         move_from_A_to_B(state_data, {vil_B, vil_A}, state_B);
@@ -486,7 +483,7 @@ void log_output_alt(const Parameters* par, const vector<DailyDetectedEvents> &de
     serial << hex << par->rep;
 
     ofstream ofs;
-    string filename = "./output/" + par->cksum + "_init_states.out";
+    string filename = output_dir + par->cksum + "_init_states.out";
     ofs.open(filename, ios_base::app);
 
     // serial refers to checksum-replicate
@@ -500,7 +497,7 @@ void log_output_alt(const Parameters* par, const vector<DailyDetectedEvents> &de
     }
 
     ofs.close();
-    filename = "./output/" + par->cksum + "_interval_cts.out";
+    filename = output_dir + par->cksum + "_interval_cts.out";
     ofs.open(filename, ios_base::app);
 
     // output event counts for the obs period
@@ -541,12 +538,12 @@ void write_headers(const Parameters* par){
 
     ofstream ofs;
 
-    string filename = "./output/" + par->cksum + "_init_states.out";
+    string filename = output_dir + par->cksum + "_init_states.out";
     ofs.open(filename);
     ofs << "serial village_id village_size S I1 R P IR V" << endl;
     ofs.close();
 
-    filename = "./output/" + par->cksum + "_interval_cts.out";
+    filename = output_dir + par->cksum + "_interval_cts.out";
     ofs.open(filename);
     ofs << "serial type len ct" << endl;
     ofs.close();
@@ -713,17 +710,20 @@ int main(int argc, char** argv) {
             // check for stopping conditions BEFORE handling newly sampled event
             if (obs_time >= 0 and (zero_infections(state_data) or (obs_time >= par->obsPeriod))) {
                 if (zero_infections(state_data)) {
-                    cerr << "no infections left\n";
+                    cerr << "No infections left. ";
                 } else if (obs_time >= par->obsPeriod) {
-                    cerr << "exceeded the observation period\n";
+                    cerr << "Exceeded the observation period. ";
                 }
                 cerr << "Stopping time: " << day << endl;
+                cerr << par->cksum << "-" << seed_increment << " rep " << par->rep;
                 if (num_days_with_detections < 1) { // no detections occurred, so this replicate isn't useful
-                    cerr << "Run failed at observation time = " << obs_time << ": <2 days with detected infections\n\n";
+                        //serial << par->cksum << '-' << setw(5) << setfill('0') << par->rep;
+                    cerr << " failed at observation time = " << obs_time << ": no intercase interval observed\n";
                     if (RETRY_SIMS) {
                         i--;
                     } // CAN RESULT IN AN INFINITE LOOP!!!
                 } else {
+                    cerr << " succeeded\n\n";
                     log_output_alt(par, detected_event_ct_ts, initial_states);
                 }
                 break;
