@@ -8,9 +8,6 @@ require(ggplot2)
 
 plot.dt <- readRDS(.args[1])
 
-aes(x = X1, ymin=Min, lower=`2.5%`, middle = `50%`, upper = `97.5%`, ymax = Max)) + 
-  geom_boxplot(stat="identity")
-
 p <- ggplot(plot.dt[movModel == 0 & moveRate == 1 & ES_Detection == 0]) +
   aes(
     factor(village_size),

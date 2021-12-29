@@ -29,8 +29,6 @@ injest <- function(fl) {
     fread(fl), serial + len ~ type, value.var = "ct", fun.aggregate = sum
   )[, .(ex = sum(ex), ic = sum(ic)), keyby = len]
   res[, cksum := exthash(fl) ]
-  # res[len > 0, c("cex", "cic") := .(cumsum(ex), cumsum(ic)) ]
-  # res[, pext := cex/(cex[.N]+cic[.N]-c(0, cex[-.N])-c(0, cic[-.N])) ]
   res
 }
 
