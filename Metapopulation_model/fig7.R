@@ -7,7 +7,7 @@ suppressPackageStartupMessages({
 .args <- if (interactive()) c(
   file.path("data", "digest.rds"),
   file.path("Figures", "fig7.png")
-)
+) else commandArgs(trailingOnly = TRUE)
 
 plot.dt <- readRDS(.args[1])
 

@@ -15,7 +15,13 @@ data/output: | ${SRCDIR}
 ${DATADIR}/digest.rds: injest.R data/parameters.txt data/output
 	$(call R)
 
+${DATADIR}/state_digest.rds: state_injest.R data/parameters.txt data/output
+	$(call R)
+
 ${FIGDIR}/fig7.png: fig7.R ${DATADIR}/digest.rds:
+	$(call R)
+
+${FIGDIR}/fig11.png: fig11.R ${DATADIR}/state_digest.rds:
 	$(call R)
 
 # figure 11: initial distribution of states
