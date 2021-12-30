@@ -7,19 +7,19 @@ suppressPackageStartupMessages({
 
 .args <- if (interactive()) c(
   file.path("data", "digest.rds"),
-  file.path("Figures", "fig2.png")
+  file.path("Figures", "fig9_alt.png")
 ) else commandArgs(trailingOnly = TRUE)
 
 plot.dt <- readRDS(.args[1])
 keys <- c("movModel", "moveRate", "ES_Detection", "vacRate", "vilModel", "cksum", "label")
 
 ref.dt <- plot.dt[
-  label == "64Kx1",
+  label == "1x64K",
   .(len = 1:max(len), pext = approx(len, pext, 1:max(len))$y),
   by=keys
 ]
 alt.dt <- plot.dt[
-  label != "64Kx1",
+  label != "1x64K",
   .(len = 1:max(len), pext = approx(len, pext, 1:max(len))$y),
   by=keys
 ]
@@ -33,14 +33,15 @@ del.dt <- alt.dt[
 del.dt[, del.p := pext - i.pext ]
 del.dt[, OF.p := 1/(i.pext/(1-i.pext) * (1-pext)/pext) ]
 
-refscen <- expression(movModel == 0 & moveRate == 0 & ES_Detection == 0 & vacRate == 0)
+refscen <- expression(movModel == 1 & ES_Detection == 0 & vacRate == 0)
 
 p <- ggplot(del.dt[eval(refscen)]) +
   aes(
     len/365, del.p,
     color = label
   ) + # facet_grid(moveRate ~ vacRate) +
-  geom_line() +
+  geom_line(data = function(dt) dt[moveRate == 0], alpha = 0.2) +
+  geom_line(data = function(dt) dt[moveRate == 0.1]) +
   theme_minimal(base_size = 14) +
   scale_x_continuous(
     "Time Since Case Observed (years)"
@@ -61,7 +62,8 @@ pinset <- ggplot(del.dt[eval(refscen)][between(len/365, 2.25, 3.75)]) +
     len/365, del.p,
     color = label
   ) + 
-  geom_line() +
+  geom_line(data = function(dt) dt[moveRate == 0], alpha = 0.2) +
+  geom_line(data = function(dt) dt[moveRate == 0.1]) +
   theme_minimal(base_size = 14) +
   scale_x_continuous(NULL, breaks = seq(2.5, 3.5, by=.5)) +
   coord_cartesian(xlim=c(2.5, 3.5), ylim = c(-5,5)/100) +

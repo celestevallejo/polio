@@ -1,6 +1,5 @@
 
 require(data.table)
-require(ggplot2)
 
 .args <- if (interactive()) c(
   file.path("data", "parameters.txt"),
@@ -14,7 +13,7 @@ dt <- fread(.args[1])[,.(
 
 dt[, label :=  {
   pops <- rle(strsplit(gsub("[{}]","",gsub("000([},])","K\\1",vilPop)),",")[[1]])
-  paste(sprintf("%sx%i", pops$values, pops$lengths), collapse=" & ")
+  paste(sprintf("%ix%s", pops$lengths, pops$values), collapse=" & ")
 }, by=vilPop]
 
 dt[, vilModel := .GRP, by=label]
@@ -27,7 +26,7 @@ exthash <- function(fl) { gsub("^([^_]+)_.+$","\\1",basename(fl)) }
 injest <- function(fl) {
   res <- dcast(
     fread(fl), serial + len ~ type, value.var = "ct", fun.aggregate = sum
-  )[, .(ex = sum(ex), ic = sum(ic)), keyby = len]
+  )[, .(ex = sum(ex), ic = sum(ic)), keyby = len][len >= 0]
   res[, cksum := exthash(fl) ]
   res
 }

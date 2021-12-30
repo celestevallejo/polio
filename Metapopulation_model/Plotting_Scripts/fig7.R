@@ -12,16 +12,16 @@ suppressPackageStartupMessages({
 plot.dt <- readRDS(.args[1])
 
 p <- ggplot(plot.dt[
-  (label %in% c("16Kx4","4Kx16")) & movModel == 0 & ES_Detection == 0 & vacRate == 0
+  (label %in% c("4x16K","16x4K")) & movModel == 0 & ES_Detection == 0 & vacRate == 0
 ][len >= 0]) + facet_grid(label ~ .) +
   aes(
     len/365, 1-pext,
-    linetype = label == "64Kx1", color = moveRate,
+    linetype = label == "1x64K", color = moveRate,
     group = interaction(label, moveRate)
   ) + # facet_grid(moveRate ~ vacRate) +
-  geom_line(data = function(dt) dt[label != "64Kx1"]) +
+  geom_line(data = function(dt) dt[label != "1x64K"]) +
   geom_line(aes(linetype = TRUE, group = NULL), data = plot.dt[
-    label == "64Kx1" & moveRate == 0 & movModel == 0 & ES_Detection == 0 & vacRate == 0
+    label == "1x64K" & moveRate == 0 & movModel == 0 & ES_Detection == 0 & vacRate == 0
   ][len >= 0, .SD, .SDcols = -c("label")]) +
   theme_minimal(base_size = 14) +
   scale_x_continuous(
@@ -32,7 +32,7 @@ p <- ggplot(plot.dt[
     "P(silent circulation)", #trans = "logit",
     breaks = c(0, 0.1, 0.25, 0.5, 0.75, 0.90, 1)
   ) +
-  scale_linetype_discrete(NULL, breaks = TRUE, labels = "64Kx1") +
+  scale_linetype_discrete(NULL, breaks = TRUE, labels = "1x64K") +
   scale_color_continuous(expression(alpha), guide = "legend", breaks = plot.dt[, sort(unique(moveRate))]) +
   theme(
     legend.position = c(0,0), legend.justification = c(0,0),
@@ -40,20 +40,20 @@ p <- ggplot(plot.dt[
   )
 
 pinsetylim = plot.dt[
-  between(len/365, 3, 4) & (label %in% c("16Kx4", "4Kx16")) & movModel == 0 & ES_Detection == 0 & vacRate == 0
+  between(len/365, 3, 4) & (label %in% c("4x16K", "16x4K")) & movModel == 0 & ES_Detection == 0 & vacRate == 0
 ][len >= 0][, ceiling(max(1-pext)*100)/100 ]
 
 pinset16 <- ggplot(plot.dt[
-  between(len/365, 3, 4) & (label %in% c("16Kx4")) & movModel == 0 & ES_Detection == 0 & vacRate == 0
+  between(len/365, 3, 4) & (label %in% c("4x16K")) & movModel == 0 & ES_Detection == 0 & vacRate == 0
 ][len >= 0]) + #facet_grid(label ~ .) +
   aes(
     len/365, 1-pext,
-    linetype = label == "64Kx1", color = moveRate,
+    linetype = label == "1x64K", color = moveRate,
     group = interaction(label, moveRate)
   ) + # facet_grid(moveRate ~ vacRate) +
-  geom_line(data = function(dt) dt[label != "64Kx1"]) +
+  geom_line(data = function(dt) dt[label != "1x64K"]) +
   geom_line(aes(linetype = TRUE, group = NULL), data = plot.dt[
-    between(len/365, 3, 4) & (label == "64Kx1") & moveRate == 0 & movModel == 0 & ES_Detection == 0 & vacRate == 0
+    between(len/365, 3, 4) & (label == "1x64K") & moveRate == 0 & movModel == 0 & ES_Detection == 0 & vacRate == 0
   ][len >= 0, .SD, .SDcols = -c("label")]) +
   theme_minimal(base_size = 14) +
   scale_x_continuous(NULL, breaks = seq(3,4,by=0.5)) +
@@ -68,16 +68,16 @@ pinset16 <- ggplot(plot.dt[
   )
 
 pinset4 <- ggplot(plot.dt[
-  between(len/365, 3, 4) & (label %in% c("4Kx16")) & movModel == 0 & ES_Detection == 0 & vacRate == 0
+  between(len/365, 3, 4) & (label %in% c("16x4K")) & movModel == 0 & ES_Detection == 0 & vacRate == 0
 ][len >= 0]) + #facet_grid(label ~ .) +
   aes(
     len/365, 1-pext,
-    linetype = label == "64Kx1", color = moveRate,
+    linetype = label == "1x64K", color = moveRate,
     group = interaction(label, moveRate)
   ) + # facet_grid(moveRate ~ vacRate) +
-  geom_line(data = function(dt) dt[label != "64Kx1"]) +
+  geom_line(data = function(dt) dt[label != "1x64K"]) +
   geom_line(aes(linetype = TRUE, group = NULL), data = plot.dt[
-    between(len/365, 3, 4) & (label == "64Kx1") & moveRate == 0 & movModel == 0 & ES_Detection == 0 & vacRate == 0
+    between(len/365, 3, 4) & (label == "1x64K") & moveRate == 0 & movModel == 0 & ES_Detection == 0 & vacRate == 0
   ][len >= 0, .SD, .SDcols = -c("label")]) +
   theme_minimal(base_size = 14) +
   scale_x_continuous(NULL, breaks = seq(3,4,by=0.5)) +

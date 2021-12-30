@@ -23,20 +23,21 @@ p <- ggplot(p.dt[eval(refscen)][len>0]) +
     variable ~ .,
     labeller = labeller(
       variable = c(icd="Intercase Intervals", exd="Extinction Intervals")
-    ),
-    scales = "free_y"
+    )
+#    , scales = "free_y"
   ) +
   aes(
     len/365, value,
     color = label
   ) + # facet_grid(moveRate ~ vacRate) +
-  geom_line(alpha = 0.1) +
-  geom_smooth() +
+  geom_line(data = function(dt) dt[variable == "icd"] ) +
+  geom_line(data = function(dt) dt[variable != "icd"], alpha = 0.1) +
+  geom_smooth(data = function(dt) dt[variable != "icd"]) +
   theme_minimal(base_size = 14) +
   scale_x_continuous(
     "Time Since Case Observed (years)"
   ) +
-#  coord_cartesian(ylim=c(-1, 1)) +
+  coord_cartesian(ylim=c(0, 0.005)) +
   scale_y_continuous(
     "Density" #trans = "logit",
 #    , breaks = seq(-.2, 1, by=0.2)
