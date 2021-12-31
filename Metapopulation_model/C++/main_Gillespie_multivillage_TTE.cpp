@@ -612,9 +612,11 @@ int main(int argc, char** argv) {
 //exit(-565);
 
     //random_device rd;                                   // generates a random real number for the seed
-    // unsigned long int seed = rd();
+    //const size_t initial_seed = rd();
+    //par->cksum = par->cksum + "_" + to_string(initial_seed);
     const size_t initial_seed = 8675309;
-    //cerr << "seed: " << seed << endl;
+    //cerr << "seed: " << initial_seed << endl;
+
     write_headers(par);
     size_t seed_increment = 0;
 
