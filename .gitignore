@@ -1,0 +1,8 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+Metapopulation_model/data
+Metapopulation_model/Model_output
+Metapopulation_model/Figures
