@@ -13,10 +13,13 @@ SCRIPTS ?= Plotting_Scripts
 data/output: | ${SRCDIR}
 	ln -s $| $@
 
-${DATADIR}/digest.rds: injest.R data/parameters.txt data/output
+${DATADIR}/parameters.rds: params.R ${DATADIR}/parameters.txt
 	$(call R)
 
-${DATADIR}/state_digest.rds: state_injest.R data/parameters.txt data/output
+${DATADIR}/digest.rds: injest.R ${DATADIR}/parameters.rds ${DATADIR}/output
+	$(call R)
+
+${DATADIR}/state_digest.rds: state_injest.R ${DATADIR}/parameters.rds ${DATADIR}/output
 	$(call R)
 
 ${FIGDIR}/fig2.png: ${SCRIPTS}/fig2.R ${DATADIR}/digest.rds:
@@ -33,7 +36,3 @@ ${FIGDIR}/fig9.png: ${SCRIPTS}/fig9.R ${DATADIR}/digest.rds:
 
 ${FIGDIR}/fig11.png: ${SCRIPTS}/fig11.R ${DATADIR}/state_digest.rds:
 	$(call R)
-
-# figure 11: initial distribution of states
-# uses one scenario, for multiple village sizes
-figure11.png: starting_conditions.R

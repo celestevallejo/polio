@@ -2,22 +2,12 @@
 require(data.table)
 
 .args <- if (interactive()) c(
-  file.path("data", "parameters.txt"),
+  file.path("data", "parameters.rds"),
   file.path("data", "output"),
   file.path("data", "digest.rds")
 )
 
-dt <- fread(.args[1])[,.(
-  cksum, movModel, moveRate, ES_Detection, vacRate, vilPop
-)]
-
-dt[, label :=  {
-  pops <- rle(strsplit(gsub("[{}]","",gsub("000([},])","K\\1",vilPop)),",")[[1]])
-  paste(sprintf("%ix%s", pops$lengths, pops$values), collapse=" & ")
-}, by=vilPop]
-
-dt[, vilModel := .GRP, by=label]
-dt$vilPop <- NULL
+dt <- readRDS(.args[1])
 
 outputs <- grep("^.+_\\d+_.+\\.out$", list.files(.args[2], "cts.out$", full.names = TRUE), invert = TRUE, value = TRUE)
 
