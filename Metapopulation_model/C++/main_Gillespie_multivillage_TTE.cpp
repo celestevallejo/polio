@@ -416,7 +416,7 @@ void append_output(const Parameters* par, vector<vector<vector<int>>> &output, c
 }
 
 
-void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<int>> &state_data, const double obs_time, vector<int> &reportable_event_ct, /*map<StateType, size_t> &infection_ct,*/ mt19937& RNG) {
+void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<int>> &state_data, const double obs_time, DailyDetectedEvents &dde, map<StateType, size_t> &infection_ct, mt19937& RNG) {
     const size_t village  = ve.village;
     const EventType event = ve.event_type;
     StateType prev_state  = NUM_OF_STATE_TYPES;
@@ -433,14 +433,24 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
     switch(ve.event_type) {
         case FIRST_INFECTION_EVENT:
             if (obs_time >= 0) {
-//                infection_ct[I1]++;
-                reportable_event_ct[FIRST_INFECTION]++;
+                if (runif(RNG) < par->PIR * par->AFP_det) { // paralytic infection detected
+                    dde.detection_events[AFP_DETECTION]++;
+                    cerr << "QQ pp " << hex << par->rep << " " << dec << par->cksum << " " << infection_ct[I1] << " " << infection_ct[IR] << endl;
+                    infection_ct = {{I1, 0}, {IR, 0}};
+                } else {
+                    infection_ct[I1]++;
+                }
+                //if (runif(RNG) < par->ES_det)             { dde.detection_events[ES_DETECTION]++; }
+                //reportable_event_ct[FIRST_INFECTION]++;
             }
             break;
         case RECOVERY_FROM_FIRST_INFECTION_EVENT:   //[[fallthrough]]
         case RECOVERY_FROM_REINFECTION_EVENT:
             if (obs_time >= 0 and zero_infections(state_data)) {
-                reportable_event_ct[EXTINCTION]++;
+                dde.detection_events[EXTINCTION_DETECTION]++;
+                cerr << "QQ pe " << hex << par->rep << " " << dec << par->cksum << " " << infection_ct[I1] << " " << infection_ct[IR] << endl;
+                infection_ct = {{I1, 0}, {IR, 0}};
+                //reportable_event_ct[EXTINCTION]++;
             }
             break;
         case DEATH_EVENT:
@@ -451,7 +461,10 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
                 --state_data[deceased][village];
                 ++state_data[birthState][village];
                 if (is_infected_state(deceased) and obs_time >= 0 and zero_infections(state_data)) {
-                    reportable_event_ct[EXTINCTION]++;
+                    dde.detection_events[EXTINCTION_DETECTION]++;
+                    cerr << "QQ pe " << hex << par->rep << " " << dec << par->cksum << " " << infection_ct[I1] << " " << infection_ct[IR] << endl;
+                    infection_ct = {{I1, 0}, {IR, 0}};
+                    //reportable_event_ct[EXTINCTION]++;
                 }
             }
             break;
@@ -465,8 +478,9 @@ void event_handler(const Parameters* par, const VillageEvent &ve, vector<vector<
             break;
         case REINFECTION_EVENT:
             if (obs_time >= 0)  {
-//                infection_ct[IR]++;
-                reportable_event_ct[REINFECTION]++; // will be determined later whether environmental surveillance occurred
+                infection_ct[IR]++;
+                //reportable_event_ct[REINFECTION]++; // will be determined later whether environmental surveillance occurred
+                if (runif(RNG) < par->ES_det)             { dde.detection_events[ES_DETECTION]++; }
             }
             break;
         case WANING_EVENT: break;
@@ -611,10 +625,10 @@ int main(int argc, char** argv) {
 //cerr << endl;
 //exit(-565);
 
-    //random_device rd;                                   // generates a random real number for the seed
-    //const size_t initial_seed = rd();
-    //par->cksum = par->cksum + "_" + to_string(initial_seed);
-    const size_t initial_seed = 8675309;
+    random_device rd;                                   // generates a random real number for the seed
+    const size_t initial_seed = rd();
+    par->cksum = par->cksum + "_" + to_string(initial_seed);
+    //const size_t initial_seed = 8675309;
     //cerr << "seed: " << initial_seed << endl;
 
     write_headers(par);
@@ -651,14 +665,15 @@ int main(int argc, char** argv) {
         // initial conditions file: serial par_combo replicate village_id village_size S I1 R P IR
         // event data:              serial par_combo replicate day_of_event event_type event_type_ct
         vector<vector<int>> initial_states;                                                 // for each state, number of people in that state for each village
-        vector<int> reportable_event_ct         = vector<int>(NUM_OF_REPORTABLE_EVENTS, 0); // things that *might* be detected
-//        map<StateType, size_t> infection_ct;
+        //vector<int> reportable_event_ct         = vector<int>(NUM_OF_REPORTABLE_EVENTS, 0); // things that *might* be detected
+        map<StateType, size_t> infection_ct;
         vector<DailyDetectedEvents> detected_event_ct_ts;                                   // time series of things that *were* detected
 
         int prev_day                            = 0;
         int num_days_with_detections            = 0;
 //        int day_ct                              = 0; // for logging data every day
 
+        DailyDetectedEvents dde(prev_day);
         while (true) {
             VillageEvent ve = sample_event(par, state_data, time, RNG); // This is where 'time' gets updated
             time = ve.time;
@@ -676,18 +691,19 @@ int main(int argc, char** argv) {
             }
 
             // have we completed the previous day (or alternatively, is this the last iteration)?
-            if ((int) day > prev_day or reportable_event_ct[EXTINCTION] > 0) {
+            //if ((int) day > prev_day or reportable_event_ct[EXTINCTION] > 0) {
+            if ((int) day > prev_day or dde.detection_events[EXTINCTION_DETECTION] > 0) {
                 // for each new day, check if we are in the obs period
                 // if so, log previous day's events
-                if (obs_time >= 0) { // 'tis a new day!  tally what happened yesterday
+                if (obs_time >= 0) {
                     DailyDetectedEvents dde(prev_day);
 
-                    binomial_distribution<int> AFP_det_binom(reportable_event_ct[FIRST_INFECTION], par->PIR * par->AFP_det);
-                    binomial_distribution<int> ES_det_binom(reportable_event_ct[FIRST_INFECTION] + reportable_event_ct[REINFECTION], par->ES_det);
+                    //binomial_distribution<int> AFP_det_binom(reportable_event_ct[FIRST_INFECTION], par->PIR * par->AFP_det);
+                    //binomial_distribution<int> ES_det_binom(reportable_event_ct[FIRST_INFECTION] + reportable_event_ct[REINFECTION], par->ES_det);
 
-                    dde.detection_events[AFP_DETECTION]        = AFP_det_binom(RNG);
-                    dde.detection_events[ES_DETECTION]         = ES_det_binom(RNG);
-                    dde.detection_events[EXTINCTION_DETECTION] = reportable_event_ct[EXTINCTION];
+                    //dde.detection_events[AFP_DETECTION]        = AFP_det_binom(RNG);
+                    //dde.detection_events[ES_DETECTION]         = ES_det_binom(RNG);
+                    //dde.detection_events[EXTINCTION_DETECTION] = reportable_event_ct[EXTINCTION];
 
                     bool had_detected_infections = dde.detection_events[AFP_DETECTION] + dde.detection_events[ES_DETECTION] > 0;
                     if (had_detected_infections or dde.detection_events[EXTINCTION_DETECTION]) {
@@ -695,8 +711,10 @@ int main(int argc, char** argv) {
                         detected_event_ct_ts.push_back(dde);
                     }
 
-                    reportable_event_ct = vector<int>(NUM_OF_REPORTABLE_EVENTS, 0); // things that *might* be detected
+                    //reportable_event_ct = vector<int>(NUM_OF_REPORTABLE_EVENTS, 0); // things that *might* be detected
                 }
+                dde.day = day;
+                dde.detection_events = vector<int>(NUM_OF_DETECTION_TYPES, 0);
                 prev_day = day;
             }
 
@@ -732,7 +750,7 @@ int main(int argc, char** argv) {
             }
 
             // handle the newly sampled event after knowing we can continue simulating
-            event_handler(par, ve, state_data, obs_time, reportable_event_ct, /*infection_ct,*/ RNG);
+            event_handler(par, ve, state_data, obs_time, dde, infection_ct, RNG);
         }
     }
     return 0;
