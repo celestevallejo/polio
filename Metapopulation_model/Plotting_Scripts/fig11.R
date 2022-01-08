@@ -3,7 +3,7 @@ require(ggplot2)
 
 .args <- if (interactive()) c(
   file.path("data", "state_digest.rds"),
-  file.path("Figures", "state_digest.rds")
+  file.path("Figures", "fig11.png")
 ) else commandArgs(trailingOnly = TRUE)
 
 plot.dt <- readRDS(.args[1])

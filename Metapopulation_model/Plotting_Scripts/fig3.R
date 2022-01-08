@@ -3,6 +3,7 @@ suppressPackageStartupMessages({
   require(data.table)
   require(ggplot2)
   require(patchwork)
+  require(RColorBrewer)
 })
 
 .args <- if (interactive()) c(
@@ -11,14 +12,21 @@ suppressPackageStartupMessages({
 ) else commandArgs(trailingOnly = TRUE)
 
 plot.dt <- readRDS(.args[1])
-plot.dt[, icd := ic / sum(ic), by=cksum ]
-plot.dt[len != -1, exd := ex / sum(ex), by=cksum ]
+plot.dt[, icd := cumsum(ic) / sum(ic), by=cksum ]
+plot.dt[len != -1, exd := cumsum(ex) / sum(ex), by=cksum ]
 
 keys <- c("movModel", "moveRate", "ES_Detection", "vacRate", "vilModel", "cksum", "label")
 p.dt <- melt(plot.dt, id.vars = c(keys, "len"), measure.vars = c("icd", "exd"))
-refscen <- expression(movModel == 0 & moveRate == 0 & ES_Detection == 0 & vacRate == 0)
+p.dt$variable = factor(p.dt$variable, levels = unique(p.dt$variable), ordered = TRUE)
 
-p <- ggplot(p.dt[eval(refscen)][len>0]) +
+refscen <- expression(
+  movModel == 0 & moveRate == 0 & ES_Detection == 0 & vacRate == 0 &
+  !(label %like% "&")
+)
+
+marker <- colorRampPalette(c('orange','red','purple','royalblue'))(5)
+
+p <- ggplot(p.dt[eval(refscen)][len>0][between(value, 0.01, 0.99)]) +
   facet_grid(
     variable ~ .,
     labeller = labeller(
@@ -30,21 +38,27 @@ p <- ggplot(p.dt[eval(refscen)][len>0]) +
     len/365, value,
     color = label
   ) + # facet_grid(moveRate ~ vacRate) +
-  geom_line(data = function(dt) dt[variable == "icd"] ) +
-  geom_line(data = function(dt) dt[variable != "icd"], alpha = 0.1) +
-  geom_smooth(data = function(dt) dt[variable != "icd"]) +
+  geom_line() +
+  geom_text(
+    aes(label = label, color = NULL),
+    data = function(dt) dt[, .(len = 365/10, value = (max(value)-min(value))*.99+min(value), label = c("A", "B")[as.numeric(variable)]), by=variable],
+    size = 8,
+    show.legend = FALSE
+  ) +
   theme_minimal(base_size = 14) +
   scale_x_continuous(
-    "Time Since Case Observed (years)"
+    "Interval Length (years)"
   ) +
-  coord_cartesian(ylim=c(0, 0.005)) +
+  coord_cartesian(xlim=c(0, 3.5), ylim=c(0.01, 0.99), expand = FALSE) +
   scale_y_continuous(
-    "Density" #trans = "logit",
-#    , breaks = seq(-.2, 1, by=0.2)
-#    , breaks = c(0, 0.1, 0.25, 0.5, 0.75, 0.90, 1)
+    "Simulated CDF (logit scale)", trans = "logit"#,
+    , breaks = c(0.01, 0.025, 0.1, 0.25, 0.5, 0.75, 0.90, 0.975, 0.99),
+minor_breaks = NULL,
+labels = scales::label_percent()
   ) +
-#  scale_linetype_discrete("Patch Arrangement") +
-#  scale_color_continuous("Movement Rate", guide = "legend", breaks = plot.dt[, sort(unique(moveRate))]) +
-  theme(legend.position = "bottom")
+  scale_color_manual(
+    NULL, breaks = c(rev(unique(del.dt$label)), factor("1x64K")), values = c(rev(marker), "black")
+  ) +
+  theme(legend.position = c(1, 0.5), legend.justification = c(1, 0), legend.direction = "horizontal")
 
-ggsave(tail(.args, 1), p, width = 7, height = 10, dpi = 600, bg = "white")
+ggsave(tail(.args, 1), p, width = 6, height = 10, dpi = 600, bg = "white")

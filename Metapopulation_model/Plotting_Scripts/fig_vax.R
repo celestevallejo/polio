@@ -6,14 +6,14 @@ suppressPackageStartupMessages({
 
 .args <- if (interactive()) c(
   file.path("data", "digest.rds"),
-  file.path("Figures", "fig7.png")
+  file.path("Figures", "fig_vax.png")
 ) else commandArgs(trailingOnly = TRUE)
 
 plot.dt <- readRDS(.args[1])
 
 keys <- c("movModel", "moveRate", "ES_Detection", "vacRate", "vilModel", "cksum", "label")
 
-refscen <- expression(movModel == 0 & ES_Detection == 0 & vacRate == 0)
+refscen <- expression(movModel == 0 & ES_Detection == 0 & moveRate == 0.1)
 
 ref.dt <- plot.dt[
   label == "1x64K",
@@ -39,10 +39,10 @@ del.dt[, OF.p := log10(((1-i.pext)/i.pext * pext/(1-pext))) ]
 
 plot.src <- rbind(
   melt(del.dt, id.vars = c(key(del.dt), "len"), measure.vars = c("p.sc", "del.p", "OF.p")),
-  melt(ref.dt[moveRate == 0][, p.sc := 1 - pext], id.vars = c(key(del.dt), "len"), measure.vars = c("p.sc"))
+  melt(ref.dt[, p.sc := 1 - pext], id.vars = c(key(del.dt), "len"), measure.vars = c("p.sc"))
 )[eval(refscen)]
 
-marker <- brewer.pal(plot.src[, length(unique(moveRate))], "Greens")
+marker <- head(brewer.pal(plot.src[, length(unique(vacRate))]+2, "BuPu"), -2)
 
 exps <- c("Pr(Silent~Circulation)", "Delta*Pr(SC)", "OR~Pr(SC)~(log~scale)")
 
@@ -56,10 +56,8 @@ scales_y <- list(y=list(
   "OR~Pr(SC)~(log~scale)" = scale_y_continuous(breaks = seq(-2,3,by=1), labels = function(b) 10^b)
 ), x="fixed")
 
-plot.src[label == "1x64K", moveRate := NA]
-
 p <- ggplot(plot.src[!is.na(value) & !is.infinite(value)]) +
-  aes(len/365, value, color = factor(moveRate), linetype = label, group = interaction(label, moveRate)) +
+  aes(len/365, value, color = factor(vacRate), linetype = label, group = interaction(label, vacRate)) +
   facet_grid_sc(
     exp ~ ., scales = scales_y, switch = "y",
     labeller = label_parsed
@@ -79,12 +77,11 @@ p <- ggplot(plot.src[!is.na(value) & !is.infinite(value)]) +
   #   box.padding = 0,
   #   direction = "y"
   # ) +
-  coord_cartesian(expand = FALSE) +
-  scale_color_brewer(
-    expression(alpha),
-    palette = "Greens",
+  coord_cartesian(expand = FALSE, xlim=c(0, 3.5)) +
+  scale_color_manual(
+    "Vax. Rate", values = marker,
     guide = "legend", na.value = "black",
-    breaks = plot.src[!is.na(moveRate), unique(moveRate)]
+    breaks = plot.src[!is.na(vacRate), unique(vacRate)]
   ) +
   scale_x_continuous(
     "Time Since Case Observed (years)"
@@ -100,13 +97,12 @@ p <- ggplot(plot.src[!is.na(value) & !is.infinite(value)]) +
   )
 
 crossbits <- list(
-  aes(len/365, value, color = factor(moveRate), linetype = label, group = interaction(label, moveRate)),
+  aes(len/365, value, color = factor(vacRate), linetype = label, group = interaction(label, vacRate)),
   #  geom_line(),
-  scale_color_brewer(
-    NULL,
-    palette = "Greens",
+  scale_color_manual(
+    NULL, values = marker,
     guide = "none", na.value = "black",
-    breaks = plot.src[!is.na(moveRate), unique(moveRate)]
+    breaks = plot.src[!is.na(vacRate), unique(vacRate)]
   ),
   scale_x_continuous(NULL, breaks = seq(2.5, 3.5, by=.5)),
   scale_y_continuous(NULL),
@@ -143,7 +139,7 @@ pinset1 <- ggplot(
 pinset1axis <- ggplot(
   plot.src[!is.na(value) & !is.infinite(value)][variable == "p.sc"][between(len/365, 2.5, 3.5)]
 ) + crossbits + geom_blank(
-  data = function(dt) dt[,.(len = rep(len[1],2), value = range(value)),by=.(moveRate, label)]
+  data = function(dt) dt[,.(len = rep(len[1],2), value = range(value)),by=.(vacRate, label)]
 ) +theme(
   axis.text.x = element_blank(),
   axis.ticks.x = element_blank(),
@@ -161,7 +157,7 @@ pinset2 <- ggplot(
 
 pinset2axis <- ggplot(
   plot.src[!is.na(value) & !is.infinite(value)][variable == "del.p"][between(len/365, 2.5, 3.5)]
-) + crossbits + geom_blank(data = function(dt) dt[,.(len = rep(len[1],2), value = range(value)),by=.(moveRate, label)]) +theme(
+) + crossbits + geom_blank(data = function(dt) dt[,.(len = rep(len[1],2), value = range(value)),by=.(vacRate, label)]) +theme(
   axis.text.x = element_blank(),
   axis.ticks.x = element_blank(),
   axis.ticks.length.x = unit(0, "null"),
@@ -176,10 +172,12 @@ pinset2axis <- ggplot(
 #   plot.src[!is.na(value) & !is.infinite(value)][variable == "OF.p"][between(len/365, 2.5, 3.5)]
 # ) + crossbits + scale_y_continuous(NULL, labels = function(bs) paste0("  ", bs))
 
+lb <- 0.4
+
 resp <- p +
-  inset_element(pinset1, left = 2.5/3.5, right = 1, top = 1, bottom = 0.66+0.33*0.3) +
-  inset_element(pinset1axis, left = 2.5/3.5-0.06, right = 2.5/3.5, top = 1, bottom = 0.66+0.33*0.3) +
-  inset_element(pinset2, left = 2.5/3.5, right = 1, top = 0.66, bottom = 0.33+0.33*0.3) +
-  inset_element(pinset2axis, left = 2.5/3.5-0.05, right = 2.5/3.5, top = 0.66, bottom = 0.33+0.33*0.3)
+  inset_element(pinset1, left = 2.5/3.5, right = 1, top = 1, bottom = 0.66+0.33*lb) +
+  inset_element(pinset1axis, left = 2.5/3.5-0.06, right = 2.5/3.5, top = 1, bottom = 0.66+0.33*lb) +
+  inset_element(pinset2, left = 2.5/3.5, right = 1, top = 0.66, bottom = 0.33+0.33*lb) +
+  inset_element(pinset2axis, left = 2.5/3.5-0.05, right = 2.5/3.5, top = 0.66, bottom = 0.33+0.33*lb)
 
 ggsave(tail(.args, 1), resp, width = 7, height = 10, dpi = 600, bg = "white")

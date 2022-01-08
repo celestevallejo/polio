@@ -15,13 +15,14 @@ keys <- c("movModel", "moveRate", "ES_Detection", "vacRate", "vilModel", "cksum"
 
 ref.dt <- plot.dt[
   label == "1x64K",
-  .(len = 1:max(len), pext = approx(len, pext, 1:max(len))$y),
-  by=keys
+  .(len = 0:max(len), pext = approx(len, pext, 0:max(len))$y),
+  keyby=keys
 ]
+
 alt.dt <- plot.dt[
-  label != "1x64K",
-  .(len = 1:max(len), pext = approx(len, pext, 1:max(len))$y),
-  by=keys
+  label != "1x64K" & !(label %like% "&"),
+  .(len = 0:max(len), pext = approx(len, pext, 0:max(len))$y),
+  keyby=keys
 ]
 
 del.dt <- alt.dt[
