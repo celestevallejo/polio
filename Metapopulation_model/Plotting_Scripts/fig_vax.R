@@ -42,7 +42,7 @@ plot.src <- rbind(
   melt(ref.dt[, p.sc := 1 - pext], id.vars = c(key(del.dt), "len"), measure.vars = c("p.sc"))
 )[eval(refscen)]
 
-marker <- head(brewer.pal(plot.src[, length(unique(vacRate))]+2, "BuPu"), -2)
+marker <- tail(brewer.pal(plot.src[, length(unique(vacRate))]+2, "BuPu"), -2)
 
 exps <- c("Pr(Silent~Circulation)", "Delta*Pr(SC)", "OR~Pr(SC)~(log~scale)")
 
@@ -91,7 +91,7 @@ p <- ggplot(plot.src[!is.na(value) & !is.infinite(value)]) +
   theme(
     strip.placement = "outer",
     axis.title.y = element_blank(),
-    legend.position = c(0.05, 0.66), legend.justification = c(0, 0),
+    legend.position = c(0.05, 0.7), legend.justification = c(0, 0),
     legend.spacing = unit(0, "line"), legend.margin = margin(t=-0.5, unit="line"),
     panel.spacing = unit(1.5, units = "line")
   )

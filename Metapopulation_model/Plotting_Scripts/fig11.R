@@ -54,16 +54,17 @@ find_equilibrium <- function(pop_size, vacc_rate){
   
   #run the model
   out<-daspk(y=yini,dy=dyini,res=model,times=times,parms=pars)
-  browser()
-  return(as.list(out[dim(out)[1],-1]/pop_size))
+  return(as.list(pmax(out[dim(out)[1],-1]/pop_size, 0)))
 }
 
 eq.dt <- melt(plot.dt[
-  movModel == 0 & moveRate == 0 & ES_Detection == 0
+  movModel == 0 & moveRate == 0 & ES_Detection == 0 & village_size == 32000
 ][,
   find_equilibrium(pop_size = village_size, vacc_rate = vacRate),
   by=.(village_size, vacRate)
 ], id.vars = c("village_size", "vacRate"))
+
+marker <- colorRampPalette(c('orange','red','purple','royalblue'))(5)
 
 p <- ggplot(plot.dt[movModel == 0 & moveRate == 0 & ES_Detection == 0]) +
   aes(

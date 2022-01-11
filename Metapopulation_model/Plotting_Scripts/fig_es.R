@@ -42,7 +42,7 @@ plot.src <- rbind(
   melt(ref.dt[, p.sc := 1 - pext], id.vars = c(key(del.dt), "len"), measure.vars = c("p.sc"))
 )[eval(refscen)]
 
-marker <- head(brewer.pal(plot.src[, length(unique(ES_Detection))]+2, "YlOrBr"), -2)
+marker <- tail(brewer.pal(plot.src[, length(unique(ES_Detection))]+2, "YlOrBr"), -2)
 
 exps <- c("Pr(Silent~Circulation)", "Delta*Pr(SC)", "OR~Pr(SC)~(log~scale)")
 
