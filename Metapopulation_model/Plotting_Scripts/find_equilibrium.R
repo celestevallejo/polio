@@ -36,8 +36,7 @@ find_equilibrium <-function(vacc_rate){
             vacc_rate=vacc_rate)
   
   #initial starting conditions for compartments
-  yini <-c(0.99,0.1,0,0,0,0)
-  #yini <-c((pop_size - 500),10,0,0,0,0)
+  yini <-c(0.9,0.1,0,0,0,0)
   
   #initial starting conditions for differential equation
   #set to zero b/c want equilibrium
