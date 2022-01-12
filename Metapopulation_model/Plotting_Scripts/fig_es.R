@@ -84,7 +84,7 @@ p <- ggplot(plot.src[!is.na(value) & !is.infinite(value)]) +
     breaks = plot.src[!is.na(ES_Detection), unique(ES_Detection)]
   ) +
   scale_x_continuous(
-    "Time Since Case Observed (years)"
+    "Time Since Detection Event (years)"
   ) +
   scale_linetype_manual(NULL, breaks = "1x64K", labels = "1x64K", values = c("1x64K"="dashed", "4x16K"="solid")) +
   theme_minimal(base_size = 14) +

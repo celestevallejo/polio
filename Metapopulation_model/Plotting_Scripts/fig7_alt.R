@@ -9,7 +9,7 @@ suppressPackageStartupMessages({
 
 .args <- if (interactive()) c(
   file.path("data", "digest.rds"),
-  file.path("Figures", "fig7.png")
+  file.path("Figures", "fig7_alt.png")
 ) else commandArgs(trailingOnly = TRUE)
 
 plot.dt <- readRDS(.args[1])
@@ -25,7 +25,7 @@ ref.dt <- plot.dt[
 ]
 
 alt.dt <- plot.dt[
-  label == "4x16K",
+  label == "16x4K",
   .(len = 0:max(len), pext = approx(len, pext, 0:max(len))$y),
   keyby=keys
 ]
@@ -92,7 +92,7 @@ p <- ggplot(plot.src[!is.na(value) & !is.infinite(value)]) +
   scale_x_continuous(
     "Time Since Case Observed (years)"
   ) +
-  scale_linetype_manual(NULL, breaks = "1x64K", labels = "1x64K", values = c("1x64K"="dashed", "4x16K"="solid")) +
+  scale_linetype_manual(NULL, breaks = "1x64K", labels = "1x64K", values = c("1x64K"="dashed", "16x4K"="solid")) +
   theme_minimal(base_size = 14) +
   theme(
     strip.placement = "outer",
@@ -113,7 +113,7 @@ crossbits <- list(
   ),
   scale_x_continuous(NULL, breaks = seq(2.5, 3.5, by=.5)),
   scale_y_continuous(NULL),
-  scale_linetype_manual(NULL, values = c("1x64K"="dashed", "4x16K"="solid"), guide = "none"),
+  scale_linetype_manual(NULL, values = c("1x64K"="dashed", "16x4K"="solid"), guide = "none"),
   coord_cartesian(expand = FALSE),
   theme_minimal(),
   theme(

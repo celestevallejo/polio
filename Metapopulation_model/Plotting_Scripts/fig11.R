@@ -61,11 +61,13 @@ eq.dt <- plot.dt[
 
 marker <- colorRampPalette(c('orange','red','purple','royalblue'))(5)
 
+plot.dt[, hetero := grepl("&", label) ]
+
 p <- ggplot(plot.dt[movModel == 0 & moveRate == 1 & ES_Detection == 0]) +
   aes(
     factor(village_size),
-    color = label
-  ) + facet_grid(vacRate ~ variable) +
+    color = label, linetype = hetero
+  ) + facet_grid(variable ~ vacRate, scales = "free_y") +
   geom_boxplot(
     aes(
       ymin =lo95/village_size,
@@ -82,17 +84,27 @@ p <- ggplot(plot.dt[movModel == 0 & moveRate == 1 & ES_Detection == 0]) +
     data = melt(eq.dt, id.vars = "vacRate"),
     color = "red", show.legend = FALSE
   ) +
-  theme_minimal(base_size = 14) +
+  theme_minimal(base_size = 10) +
   scale_x_discrete(
     "Village Size",
     labels = function(f) gsub("000","K", as.character(f))
   ) +
-  coord_cartesian(ylim=c(0.0001, 0.6)) +
+#  coord_cartesian(ylim=c(0.0001, 0.6)) +
   scale_y_continuous(
-    "% Compartment (logit scale)", trans = "logit",
-    breaks = c(0.0001, 0.001, 0.01, 0.1, 0.25, 0.5)
+    "% Compartment (logit scale)", trans = "logit"
+    , breaks = signif(2^(c(seq(-11,-5,1), seq(-5,-0.5,0.5))), 2),
+    labels = scales::percent_format()
   ) +
-  scale_color_discrete(NULL) +
-  theme(legend.position = "bottom")
+  scale_color_manual(
+    NULL, breaks = c(
+      rev(unique(plot.dt$label))[c(1:2, 4, 6:7)],
+      factor("1x32K & 4x8K"),
+      factor("1x32K & 8x4K"), factor("1x64K")
+    ), values = c(
+      rev(marker), rev(marker)[c(4, 2)], "black"
+    )
+  ) +
+  scale_linetype_manual(NULL, labels = c(`TRUE`="mixed", `FALSE`="matching"), values = c(`TRUE`="dashed", `FALSE`="solid")) +
+  theme(legend.position = "bottom", panel.spacing = unit(1, units = "line"))
 
-ggsave(tail(.args, 1), p, width = 14, height = 7, dpi = 600, bg = "white")
+ggsave(tail(.args, 1), p, width = 7, height = 10, dpi = 600, bg = "white")
