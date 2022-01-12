@@ -611,10 +611,10 @@ int main(int argc, char** argv) {
 //cerr << endl;
 //exit(-565);
 
-    //random_device rd;                                   // generates a random real number for the seed
-    //const size_t initial_seed = rd();
-    //par->cksum = par->cksum + "_" + to_string(initial_seed);
-    const size_t initial_seed = 8675309;
+    random_device rd;                                   // generates a random real number for the seed
+    const size_t initial_seed = rd();
+    par->cksum = par->cksum + "_" + to_string(initial_seed);
+    //const size_t initial_seed = 8675309;
     //cerr << "seed: " << initial_seed << endl;
 
     write_headers(par);
