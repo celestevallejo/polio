@@ -12,61 +12,56 @@ plot.dt <- readRDS(.args[1])
 #differential algebraic equation (ODE + constraint)
 library(deSolve)
 
-model <- function(t,y,dy,pars){
-  with(as.list(c(y,dy,pars)),{
-    
-    trans = beta*(y[2]+kappa*y[6])/pop_size
-    
-    I1_inf = y[1]*trans
-    Ir_inf = kappa*y[5]*trans
-    
-    s_eq = dy[1] - mu*pop_size + vacc_rate*y[1] + I1_inf + mu*y[1]
-    i1_eq = dy[2] - I1_inf + (gamma + mu)*y[2]
-    v_eq = dy[3] - vacc_rate*y[1] + mu*y[3]
-    r_eq = dy[4] - gamma*y[2] - (gamma/kappa)*y[6] + (omega + mu)*y[4]
-    p_eq = dy[5] - omega*y[4] + Ir_inf + mu*y[5]
-    ir_eq = dy[6] - Ir_inf + ((gamma/kappa) + mu)*y[6]
-    constraint = pop_size - (y[1]+y[2]+y[3]+y[4]+y[5]+y[6])
-    
-    list(c(s_eq,i1_eq,v_eq,r_eq,p_eq,ir_eq))
-    
-  })
-}
+dmodel <- function(y, pars) with(as.list(c(y, pars)), {
+  trans = beta*(I1+kappa*IR)
+  
+  I1_inf = S*trans
+  IR_inf = kappa*P*trans
+  
+  death <- -mu*y
+  birth <- c((1-vacc_rate)*mu, 0, vacc_rate*mu, 0, 0, 0)
+  inf1 <- c(-I1_inf, I1_inf, 0, 0, 0, 0)
+  rinf <- c(0, 0, 0, 0, -IR_inf, IR_inf)
+  rec <- c(0, -gamma*I1, 0, gamma*I1+gamma/kappa*IR, 0, -gamma/kappa*IR)
+  wane <- c(0, 0, 0, -omega*R, omega*R, 0)
+  return(death + birth + inf1 + rinf + rec + wane)
+})
 
-find_equilibrium <- function(pop_size, vacc_rate){
+model <- function(t,y,dy,pars) return(list(dy - dmodel(y, pars)))
+
+find_equilibrium <- function(vacc_rate){
   #input: total population size, vaccination rate
   #output: proportion of individuals in each compartment in the order
-  #S,I1,V,R,P,Ir
+  #S,I1,V,R,P,IR
   
   #model parameters
   pars <- c(mu = 0.02, beta = 135, gamma = 13, omega = 0.2, kappa = 0.4179,
-            pop_size = pop_size,vacc_rate=vacc_rate)
+            vacc_rate=vacc_rate)
   
   #initial starting conditions for compartments
-  yini <-c(S=(pop_size - 1),I1=1,V=0,R=0,P=0,Ir=0)
+  yini <-c(S=0.90-vacc_rate, I1=0.1, V=vacc_rate, R=0, P=0, IR=0)
   
-  #initial starting conditions for differential equation
-  #set to zero b/c want equilibrium
-  dyini <- c(0,0,0,0,0,0)
+  # initial starting conditions for differential equation
+  dyini <- dmodel(yini, pars)
   
   #length of time to run the model
   times = seq(0,10000,0.1)
   
   #run the model
   out<-daspk(y=yini,dy=dyini,res=model,times=times,parms=pars)
-  return(as.list(pmax(out[dim(out)[1],-1]/pop_size, 0)))
+  return(as.list(out[dim(out)[1],-1]))
 }
 
-eq.dt <- melt(plot.dt[
+eq.dt <- plot.dt[
   movModel == 0 & moveRate == 0 & ES_Detection == 0 & village_size == 32000
 ][,
-  find_equilibrium(pop_size = village_size, vacc_rate = vacRate),
-  by=.(village_size, vacRate)
-], id.vars = c("village_size", "vacRate"))
+  find_equilibrium(vacc_rate = vacRate),
+  by=.(vacRate)
+]
 
 marker <- colorRampPalette(c('orange','red','purple','royalblue'))(5)
 
-p <- ggplot(plot.dt[movModel == 0 & moveRate == 0 & ES_Detection == 0]) +
+p <- ggplot(plot.dt[movModel == 0 & moveRate == 1 & ES_Detection == 0]) +
   aes(
     factor(village_size),
     color = label
@@ -84,7 +79,7 @@ p <- ggplot(plot.dt[movModel == 0 & moveRate == 0 & ES_Detection == 0]) +
   ) +
   geom_hline(
     aes(x=NULL, yintercept = value, color = NULL),
-    data = eq.dt,
+    data = melt(eq.dt, id.vars = "vacRate"),
     color = "red", show.legend = FALSE
   ) +
   theme_minimal(base_size = 14) +
